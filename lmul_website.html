@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L-Mul · Hardware-Accelerated Neural Networks</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --bg-card: #141414;
+            --border: #262626;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --text-muted: #52525b;
+            --accent: #22c55e;
+            --accent-dim: #16a34a;
+            --blue: #3b82f6;
+            --orange: #f97316;
+            --red: #ef4444;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'IBM Plex Sans', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            padding: 1rem 2rem;
+            background: rgba(10,10,10,0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+        .logo {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        .nav-links a { color: var(--text-dim); font-size: 0.9rem; }
+        .nav-links a:hover { color: var(--text); }
+        .hero {
+            min-height: 100vh;
+            padding: 8rem 2rem 4rem;
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+        }
+        .hero h1 span { color: var(--accent); }
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin-bottom: 3rem;
+        }
+        .stats {
+            display: flex;
+            gap: 3rem;
+            flex-wrap: wrap;
+        }
+        .stat-item .value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-item .label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        section {
+            padding: 5rem 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .section-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+        .section-title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        .section-desc {
+            color: var(--text-dim);
+            max-width: 600px;
+            margin-bottom: 2.5rem;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .algo-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .algo-box pre {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            overflow-x: auto;
+        }
+        .algo-box .comment { color: var(--text-muted); }
+        .algo-box .keyword { color: var(--blue); }
+        .algo-box .number { color: var(--orange); }
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        @media (max-width: 768px) {
+            .results-grid { grid-template-columns: 1fr; }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+        td.mono { font-family: 'IBM Plex Mono', monospace; }
+        .diff { color: var(--accent); }
+        .diff.bad { color: var(--orange); }
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+        .metric-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .metric-box {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .metric-box.highlight {
+            border-color: var(--accent);
+            background: rgba(34, 197, 94, 0.05);
+        }
+        .metric-box .val {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .metric-box .lbl {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .impl-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .impl-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .impl-card h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .impl-card p {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+        .status {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .status.done { background: rgba(34,197,94,0.2); color: var(--accent); }
+        .status.wip { background: rgba(249,115,22,0.2); color: var(--orange); }
+        .tags { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .tags span {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            background: var(--border);
+            border-radius: 4px;
+            color: var(--text-dim);
+        }
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .team-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .team-card .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .team-card .name { font-weight: 500; font-size: 0.9rem; }
+        .team-card .role { font-size: 0.75rem; color: var(--text-muted); }
+        footer {
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--text-dim); margin: 0 1rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">L-Mul</div>
+        <ul class="nav-links">
+            <li><a href="#algorithm">Algorithm</a></li>
+            <li><a href="#results">Results</a></li>
+            <li><a href="#implementations">Progress</a></li>
+            <li><a href="#team">Team</a></li>
+            <li><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration">GitHub</a></li>
+        </ul>
+    </nav>
+
+    <div class="hero">
+        <h1>Making neural networks <span>3x smaller</span> with approximate multiplication</h1>
+        <p>L-Mul replaces expensive floating-point multiplication with simple addition in log-space. Less silicon, less power, nearly identical accuracy.</p>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="value">66.8%</div>
+                <div class="label">area reduction</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">63%</div>
+                <div class="label">fewer cells</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">&lt;1%</div>
+                <div class="label">accuracy loss</div>
+            </div>
+        </div>
+    </div>
+
+    <section id="algorithm">
+        <div class="section-label">How it works</div>
+        <h2 class="section-title">Multiplication → Addition</h2>
+        <p class="section-desc">Instead of multiplying mantissas (O(n²)), L-Mul adds exponent+mantissa fields directly (O(n)). The logarithmic representation makes this work.</p>
+        <div class="algo-box">
+            <pre><span class="keyword">def</span> lmul_bits(a, b):
+    a_bits = a.view(torch.int32)
+    b_bits = b.view(torch.int32)
+    
+    a_bf16 = (a_bits >> <span class="number">16</span>) & <span class="number">0xFFFF</span>
+    b_bf16 = (b_bits >> <span class="number">16</span>) & <span class="number">0xFFFF</span>
+    
+    a_sign = (a_bf16 >> <span class="number">15</span>) & <span class="number">0x1</span>
+    b_sign = (b_bf16 >> <span class="number">15</span>) & <span class="number">0x1</span>
+    a_field = a_bf16 & <span class="number">0x7FFF</span>
+    b_field = b_bf16 & <span class="number">0x7FFF</span>
+    
+    sum_full = a_field + b_field + <span class="number">0x4080</span>
+    carry = (sum_full >> <span class="number">15</span>) & <span class="number">0x3</span>
+    
+    field_sel = torch.where(carry == <span class="number">1</span>, sum_full & <span class="number">0x7FFF</span>, <span class="number">0</span>)
+    field_sel = torch.where(carry >= <span class="number">2</span>, <span class="number">0x7FFF</span>, field_sel)
+    
+    s_result = a_sign ^ b_sign
+    result_bits = (s_result << <span class="number">15</span>) | field_sel
+    result = (result_bits << <span class="number">16</span>).view(torch.float32)
+    
+    <span class="keyword">return</span> result + (result / <span class="number">32</span>) + (result / <span class="number">64</span>)</pre>
+        </div>
+    </section>
+
+    <section id="results">
+        <div class="section-label">Results</div>
+        <h2 class="section-title">Accuracy across architectures</h2>
+        <p class="section-desc">Tested on MLP, CNN, LSTM, and Transformer models. Neural networks tolerate the approximation surprisingly well.</p>
+        
+        <div class="results-grid">
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr><th>Model</th><th>Dataset</th><th>FP32</th><th>L-Mul</th><th>Δ</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>MLP</td>
+                            <td>MNIST</td>
+                            <td class="mono">97.02%</td>
+                            <td class="mono">97.01%</td>
+                            <td class="diff">−0.01%</td>
+                        </tr>
+                        <tr>
+                            <td>CNN</td>
+                            <td>MNIST</td>
+                            <td class="mono">98.30%</td>
+                            <td class="mono">98.07%</td>
+                            <td class="diff">−0.23%</td>
+                        </tr>
+                        <tr>
+                            <td>LSTM</td>
+                            <td>FashionMNIST</td>
+                            <td class="mono">83.4%</td>
+                            <td class="mono">82.8%</td>
+                            <td class="diff">−0.6%</td>
+                        </tr>
+                        <tr>
+                            <td>LSTM</td>
+                            <td>KMNIST</td>
+                            <td class="mono">84.8%</td>
+                            <td class="mono">84.2%</td>
+                            <td class="diff">−0.6%</td>
+                        </tr>
+                        <tr>
+                            <td>LSTM</td>
+                            <td>SeqMNIST</td>
+                            <td class="mono">95.2%</td>
+                            <td class="mono">94.6%</td>
+                            <td class="diff">−0.6%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card">
+                <div class="chart-container">
+                    <canvas id="accuracyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1rem;">Transformer (GPT-2) Perplexity</h3>
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Dataset</th><th>FP32 Perplexity</th><th>L-Mul Perplexity</th><th>Δ</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>nanoGPT (10.65M params)</td>
+                        <td>Shakespeare</td>
+                        <td class="mono">4.99</td>
+                        <td class="mono">4.64</td>
+                        <td class="diff">−7.0%</td>
+                    </tr>
+                    <tr>
+                        <td>LSTM LLM</td>
+                        <td>Shakespeare</td>
+                        <td class="mono">20.59</td>
+                        <td class="mono">21.85</td>
+                        <td class="diff bad">+6.1%</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                Lower perplexity = better. nanoGPT with L-Mul actually improved slightly. 
+                LSTM sees 6.1% degradation but remains usable.
+            </p>
+        </div>
+
+        <div class="metric-row">
+            <div class="metric-box highlight">
+                <div class="val">66.8%</div>
+                <div class="lbl">area reduction vs IEEE</div>
+            </div>
+            <div class="metric-box">
+                <div class="val">63%</div>
+                <div class="lbl">fewer cells</div>
+            </div>
+            <div class="metric-box">
+                <div class="val">96.6%</div>
+                <div class="lbl">LSTM prediction agreement</div>
+            </div>
+            <div class="metric-box">
+                <div class="val">3.01×</div>
+                <div class="lbl">more parallelism possible</div>
+            </div>
+        </div>
+    </section>
+
+    <section id="implementations">
+        <div class="section-label">Current Progress</div>
+        <h2 class="section-title">What we're building</h2>
+        <p class="section-desc">Software implementations for accuracy testing, hardware implementations for real efficiency metrics.</p>
+        
+        <div class="impl-grid">
+            <div class="impl-card">
+                <h3>Verilog L-Mul Unit <span class="status done">Done</span></h3>
+                <p>BF16 L-Mul synthesized with Yosys to Nangate 45nm. Gives us area and cell count metrics.</p>
+                <div class="tags"><span>Verilog</span><span>Yosys</span><span>45nm</span></div>
+            </div>
+            <div class="impl-card">
+                <h3>gem5 System Sim <span class="status wip">In Progress</span></h3>
+                <p>Full-system simulation with memory-mapped L-Mul accelerator. Configurable PE array (4×4, 8×8, 16×16), cycle-accurate timing model, real CPU-accelerator interaction.</p>
+                <div class="tags"><span>gem5</span><span>ARM</span><span>MMIO</span><span>C++</span></div>
+            </div>
+            <div class="impl-card">
+                <h3>Eyeriss v2 Integration <span class="status wip">In Progress</span></h3>
+                <p>Replacing multipliers in Processing Elements with L-Mul. Currently debugging state machine.</p>
+                <div class="tags"><span>Vivado</span><span>Eyeriss</span><span>PE Array</span></div>
+            </div>
+            <div class="impl-card">
+                <h3>Verilog MLP <span class="status wip">In Progress</span></h3>
+                <p>Full 128-neuron layer in Verilog. Working on 10-output classification layer.</p>
+                <div class="tags"><span>Verilog</span><span>Vivado</span><span>MNIST</span></div>
+            </div>
+            <div class="impl-card">
+                <h3>PyTorch L-Mul <span class="status done">Done</span></h3>
+                <p>Software implementation for MLP, CNN, LSTM accuracy testing. Vectorized NumPy and PyTorch.</p>
+                <div class="tags"><span>PyTorch</span><span>NumPy</span><span>Python</span></div>
+            </div>
+            <div class="impl-card">
+                <h3>nanoGPT Integration <span class="status done">Done</span></h3>
+                <p>LMULLinear layer replacing nn.Linear in GPT-2. Perplexity eval with configurable batch/block sizes.</p>
+                <div class="tags"><span>nanoGPT</span><span>Transformers</span><span>Shakespeare</span></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="team">
+        <div class="section-label">Team</div>
+        <h2 class="section-title">Who's building this</h2>
+        <div class="team-grid">
+            <div class="team-card">
+                <div class="avatar">O</div>
+                <div><div class="name">Owen Shi</div><div class="role">gem5 / system simulation</div></div>
+            </div>
+            <div class="team-card">
+                <div class="avatar">E</div>
+                <div><div class="name">Edgar Guzman</div><div class="role">Verilog MLP / Vivado</div></div>
+            </div>
+            <div class="team-card">
+                <div class="avatar">I</div>
+                <div><div class="name">Idhant Kumar</div><div class="role">synthesis / power analysis</div></div>
+            </div>
+            <div class="team-card">
+                <div class="avatar">B</div>
+                <div><div class="name">Brendan Kuang</div><div class="role">nanoGPT / transformers</div></div>
+            </div>
+            <div class="team-card">
+                <div class="avatar">B</div>
+                <div><div class="name">Brandon Chiou</div><div class="role">Eyeriss / PE arrays</div></div>
+            </div>
+            <div class="team-card">
+                <div class="avatar">P</div>
+                <div><div class="name">Pranav Kumarsubha</div><div class="role">ablation / website</div></div>
+            </div>
+        </div>
+        <p style="margin-top: 2rem; color: var(--text-muted);">Advised by Professor Rajesh Gupta · Halıcıoğlu Data Science Institute, UC San Diego</p>
+    </section>
+
+    <footer>
+        <a href="https://github.com/oowenn/LMUL-Hardware-Acceleration">GitHub</a>
+        <a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/NNs">Notebooks</a>
+        <a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/rtl">Verilog</a>
+        <a href="https://datascience.ucsd.edu/">HDSI</a>
+        <p style="margin-top: 1rem;">DSC 180B · Winter 2026</p>
+    </footer>
+
+    <script>
+        var ctx = document.getElementById('accuracyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['MLP', 'CNN', 'LSTM\nFashion', 'LSTM\nKMNIST', 'LSTM\nSeq'],
+                datasets: [{
+                    label: 'FP32',
+                    data: [97.02, 98.30, 83.4, 84.8, 95.2],
+                    backgroundColor: '#3b82f6'
+                }, {
+                    label: 'L-Mul',
+                    data: [97.01, 98.07, 82.8, 84.2, 94.6],
+                    backgroundColor: '#22c55e'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#a1a1aa' }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 75,
+                        max: 100,
+                        ticks: { color: '#a1a1aa' },
+                        grid: { color: '#262626' }
+                    },
+                    x: {
+                        ticks: { color: '#a1a1aa' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
