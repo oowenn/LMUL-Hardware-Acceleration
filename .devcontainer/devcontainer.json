@@ -1,24 +1,35 @@
-// Dev container configuration for gem5 testing
-// Use this when you want to run gem5 simulations
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-dockerfile
 {
-	"name": "gem5-test-container",
+	"name": "lmul-dev-container",
 	"build": {
-		"context": "..",
-		"dockerfile": "../Dockerfile.gem5-test"
+	  "context": "..",
+	  "dockerfile": "../Dockerfile"
 	},
-	
+  
+	// Allow the container to read your SSH keys so git push works
+	"runArgs": [
+	  "-v", "${env:HOME}/.ssh:/root/.ssh:ro"
+	],
+  
 	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-python.python",
-				"ms-toolsai.jupyter"
-			]
-		}
-	},
-	
-	// Workspace folder - Codespaces uses /workspaces/<repo-name>
-	// Don't override, let Codespaces set it automatically
-	
-	// Forward ports if needed for visualization
-	"forwardPorts": [8888]
+	  "vscode": {
+		"extensions": [
+		  "ms-python.python",
+		  "ms-toolsai.jupyter"
+		]
+	  }
+	}
+    
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Uncomment the next line to run commands after the container is created.
+	// "postCreateCommand": "cat /etc/os-release",
+
+	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "devcontainer"
 }
