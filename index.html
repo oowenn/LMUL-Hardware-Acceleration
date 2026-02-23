@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L-Mul · Hardware-Accelerated Neural Networks</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root{--bg:#000;--surface:#0a0a0a;--surface-2:#111;--surface-3:#1a1a1a;--border:#222;--border-light:#333;--text:#fff;--text-dim:#a0a0a0;--text-muted:#666;--primary:#00ff88;--accent:#7c3aed;--blue:#3b82f6;--orange:#f59e0b}
+        *{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}::selection{background:var(--primary);color:var(--bg)}a{color:var(--primary);text-decoration:none}
+        #particles{position:fixed;inset:0;z-index:0;pointer-events:none}
+        .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.03) 1px,transparent 1px);background-size:60px 60px;z-index:1;pointer-events:none;mask-image:radial-gradient(ellipse 80% 50% at 50% 0%,#000,transparent)}
+        .glow{position:fixed;top:-50%;left:50%;transform:translateX(-50%);width:150%;height:100%;background:radial-gradient(ellipse at center,rgba(0,255,136,0.1) 0%,transparent 50%);z-index:1;pointer-events:none}
+        nav{position:fixed;top:0;width:100%;padding:1rem 2rem;background:rgba(0,0,0,0.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.05);z-index:1000;display:flex;justify-content:space-between;align-items:center}
+        .logo{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--primary),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .nav-links{display:flex;gap:2.5rem;list-style:none}.nav-links a{color:var(--text-dim);font-size:.9rem;font-weight:500;transition:.2s}.nav-links a:hover{color:var(--text)}
+        .nav-cta{padding:.6rem 1.2rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;display:flex;align-items:center;gap:.5rem;transition:.2s}.nav-cta:hover{background:var(--surface-3)}.nav-cta svg{width:18px;height:18px}
+        .hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:8rem 2rem 4rem;z-index:10;max-width:1400px;margin:0 auto}
+        .hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.2);border-radius:100px;font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--primary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2rem;animation:fadeUp .8s ease}
+        .hero-badge::before{content:'';width:6px;height:6px;background:var(--primary);border-radius:50%;animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .hero h1{font-size:clamp(3rem,7vw,5.5rem);font-weight:800;line-height:1.05;letter-spacing:-.03em;margin-bottom:1.5rem;animation:fadeUp .8s ease .1s both}
+        .hero h1 .gradient{background:linear-gradient(135deg,var(--primary),#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .hero-desc{font-size:1.25rem;color:var(--text-dim);max-width:550px;margin-bottom:2.5rem;animation:fadeUp .8s ease .2s both}
+        .hero-btns{display:flex;gap:1rem;margin-bottom:4rem;animation:fadeUp .8s ease .3s both}
+        .btn{padding:1rem 2rem;border-radius:12px;font-size:1rem;font-weight:600;transition:.3s;display:inline-flex;align-items:center;gap:.5rem}
+        .btn-primary{background:var(--primary);color:var(--bg);box-shadow:0 0 40px rgba(0,255,136,0.3)}.btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 60px rgba(0,255,136,0.4)}
+        .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--surface-3);transform:translateY(-2px)}
+        .hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;animation:fadeUp .8s ease .4s both}
+        @media(max-width:900px){.hero-stats{grid-template-columns:repeat(2,1fr)}}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;position:relative;overflow:hidden;transition:.3s}
+        .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),var(--blue));opacity:0;transition:opacity .3s}
+        .stat-card:hover{border-color:var(--border-light);transform:translateY(-4px)}.stat-card:hover::before{opacity:1}
+        .stat-value{font-family:'JetBrains Mono',monospace;font-size:2.5rem;font-weight:700;background:linear-gradient(135deg,var(--primary),#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .stat-label{font-size:.875rem;color:var(--text-muted);margin-top:.25rem}
+        .stat-detail{font-size:.75rem;color:var(--text-muted);margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);opacity:0;transform:translateY(10px);transition:.3s}
+        .stat-card:hover .stat-detail{opacity:1;transform:translateY(0)}
+        section{position:relative;padding:6rem 2rem;z-index:10}.container{max-width:1400px;margin:0 auto}
+        .section-badge{display:inline-flex;padding:.5rem 1rem;background:var(--surface-2);border:1px solid var(--border);border-radius:100px;font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--primary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:1.5rem}
+        .section-title{font-size:clamp(2rem,4vw,3rem);font-weight:700;letter-spacing:-.02em;margin-bottom:1rem}
+        .section-desc{font-size:1.1rem;color:var(--text-dim);max-width:600px}
+        .section-header{text-align:center;margin-bottom:4rem}.section-header .section-desc{margin:0 auto}
+        #algorithm{background:linear-gradient(180deg,var(--bg) 0%,var(--surface) 100%)}
+        .algo-grid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start}@media(max-width:1000px){.algo-grid{grid-template-columns:1fr}}
+        .algo-steps{display:flex;flex-direction:column;gap:1rem}
+        .algo-step{display:flex;gap:1rem;padding:1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;transition:.3s}
+        .algo-step:hover{border-color:var(--primary);transform:translateX(8px)}
+        .step-num{width:32px;height:32px;background:linear-gradient(135deg,var(--primary),var(--blue));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.875rem;color:var(--bg);flex-shrink:0}
+        .step-content h4{font-size:1rem;margin-bottom:.25rem}.step-content p{font-size:.85rem;color:var(--text-dim)}
+        .code-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+        .code-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:var(--surface-2);border-bottom:1px solid var(--border)}
+        .code-dots{display:flex;gap:.5rem}.code-dots span{width:12px;height:12px;border-radius:50%}.code-dots span:nth-child(1){background:#ff5f57}.code-dots span:nth-child(2){background:#ffbd2e}.code-dots span:nth-child(3){background:#28ca41}
+        .code-file{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text-muted)}
+        .code-body{padding:1.5rem;overflow-x:auto}.code-body pre{font-family:'JetBrains Mono',monospace;font-size:.75rem;line-height:1.8;color:var(--text-dim)}
+        .code-body .kw{color:#c678dd}.code-body .fn{color:#61afef}.code-body .num{color:#d19a66}.code-body .cm{color:#5c6370;font-style:italic}
+        #results{background:var(--surface)}
+        .results-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2rem}@media(max-width:900px){.results-grid{grid-template-columns:1fr}}
+        .result-card{background:var(--surface-2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:.3s}
+        .result-card:hover{border-color:var(--border-light);transform:translateY(-4px)}
+        .result-header{padding:1.5rem;border-bottom:1px solid var(--border)}.result-header h3{font-size:1.1rem}
+        .result-body{padding:1.5rem}
+        table{width:100%;border-collapse:collapse}th,td{padding:.75rem;text-align:left;border-bottom:1px solid var(--border)}
+        th{font-size:.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase}td{font-size:.85rem}
+        .mono{font-family:'JetBrains Mono',monospace}
+        .diff{display:inline-flex;padding:.2rem .4rem;background:rgba(0,255,136,0.1);border-radius:4px;color:var(--primary);font-family:'JetBrains Mono',monospace;font-size:.75rem}
+        .chart-container{position:relative;height:280px}
+        .charts-embed{display:grid;grid-template-columns:repeat(2,1fr);gap:2rem;margin-top:3rem}@media(max-width:900px){.charts-embed{grid-template-columns:1fr}}
+        .chart-embed{background:var(--surface-2);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+        .chart-embed-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border)}.chart-embed-header h4{font-size:1rem;margin-bottom:.25rem}.chart-embed-header p{font-size:.8rem;color:var(--text-muted)}
+        .chart-embed iframe{width:100%;height:371px;border:none}
+        .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;margin-top:3rem}@media(max-width:900px){.metrics-row{grid-template-columns:repeat(2,1fr)}}
+        .metric-card{background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:1.5rem;text-align:center;transition:.3s;position:relative;overflow:hidden}
+        .metric-card.featured{border-color:var(--primary);box-shadow:0 0 40px rgba(0,255,136,0.15)}
+        .metric-card.featured::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--blue))}
+        .metric-card:hover{transform:translateY(-4px)}
+        .metric-value{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:700;background:linear-gradient(135deg,var(--primary),#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .metric-label{font-size:.8rem;color:var(--text-muted);margin-top:.5rem}
+        #ablation{background:var(--bg)}
+        .ablation-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2rem}@media(max-width:900px){.ablation-grid{grid-template-columns:1fr}}
+        .ablation-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:.3s}
+        .ablation-card:hover{border-color:var(--border-light);transform:translateY(-4px)}
+        .ablation-header{padding:1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+        .ablation-header h3{font-size:1.1rem;margin-bottom:.25rem}.ablation-header p{font-size:.8rem;color:var(--text-dim)}
+        .ablation-badge{padding:.3rem .6rem;background:linear-gradient(135deg,var(--primary),var(--blue));border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;color:var(--bg);text-transform:uppercase}
+        .ablation-body{padding:1.25rem}
+        .ablation-results{display:flex;flex-direction:column;gap:.4rem}
+        .ablation-row{display:flex;justify-content:space-between;align-items:center;padding:.7rem .9rem;background:var(--surface-2);border-radius:8px;transition:.2s}
+        .ablation-row:hover{background:var(--surface-3);transform:translateX(4px)}
+        .ablation-row .config{font-size:.85rem;color:var(--text-dim)}.ablation-row .value{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--primary)}
+        .ablation-row.baseline .value{color:var(--text)}.ablation-row.best{border:1px solid var(--primary);background:rgba(0,255,136,0.05)}
+        .ablation-insight{margin-top:1rem;padding:.9rem;background:var(--bg);border-radius:8px;font-size:.8rem;color:var(--text-dim);border-left:3px solid var(--primary)}
+        #hardware{background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%)}
+        .hw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}@media(max-width:1000px){.hw-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.hw-grid{grid-template-columns:1fr}}
+        .hw-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;transition:.3s;position:relative;overflow:hidden}
+        .hw-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--blue));transform:scaleX(0);transform-origin:left;transition:transform .3s}
+        .hw-card:hover{border-color:var(--border-light);transform:translateY(-4px)}.hw-card:hover::before{transform:scaleX(1)}
+        .hw-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem}.hw-card h3{font-size:1rem}
+        .status{padding:.2rem .5rem;border-radius:6px;font-size:.6rem;font-weight:600;text-transform:uppercase}
+        .status.done{background:rgba(0,255,136,0.15);color:var(--primary)}.status.wip{background:rgba(245,158,11,0.15);color:var(--orange)}
+        .hw-card p{font-size:.8rem;color:var(--text-dim);line-height:1.5;margin-bottom:.75rem}
+        .hw-tags{display:flex;flex-wrap:wrap;gap:.4rem}.hw-tag{padding:.2rem .5rem;background:var(--surface-2);border-radius:6px;font-size:.7rem;color:var(--text-muted)}
+        .gem5-results{margin-top:3rem;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+        .gem5-header{padding:1.25rem;border-bottom:1px solid var(--border)}.gem5-header h3{font-size:1.1rem;margin-bottom:.4rem}.gem5-header p{font-size:.8rem;color:var(--text-dim)}
+        .gem5-table-wrap{overflow-x:auto;padding:1.25rem}.gem5-table{width:100%;min-width:700px}.gem5-table th{background:var(--surface-2)}.gem5-table .hl{color:var(--primary);font-weight:600}
+        #team{background:var(--bg)}
+        .team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}@media(max-width:900px){.team-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.team-grid{grid-template-columns:1fr}}
+        .team-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.25rem;text-align:center;transition:.3s}
+        .team-card:hover{border-color:var(--border-light);transform:translateY(-4px)}
+        .team-avatar{width:56px;height:56px;margin:0 auto .75rem;background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;color:var(--bg)}
+        .team-card h4{font-size:1rem;margin-bottom:.2rem}.team-card .role{font-size:.8rem;color:var(--text-muted)}
+        .advisor{text-align:center;margin-top:3rem;padding:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:16px}.advisor p{color:var(--text-dim)}.advisor strong{color:var(--text)}
+        footer{position:relative;padding:2.5rem 2rem;background:var(--surface);border-top:1px solid var(--border);z-index:10}
+        .footer-container{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem}
+        .footer-links{display:flex;gap:2rem}.footer-links a{color:var(--text-dim);font-size:.85rem;transition:.2s}.footer-links a:hover{color:var(--primary)}
+        .footer-text{font-size:.8rem;color:var(--text-muted)}
+        .scroll-animate{opacity:0;transform:translateY(30px);transition:.8s ease}.scroll-animate.visible{opacity:1;transform:translateY(0)}
+    </style>
+</head>
+<body>
+    <canvas id="particles"></canvas>
+    <div class="grid-bg"></div>
+    <div class="glow"></div>
+    <nav>
+        <div class="logo">L-Mul</div>
+        <ul class="nav-links"><li><a href="#algorithm">Algorithm</a></li><li><a href="#results">Results</a></li><li><a href="#ablation">Ablation</a></li><li><a href="#hardware">Hardware</a></li><li><a href="#team">Team</a></li></ul>
+        <a href="https://github.com/oowenn/LMUL-Hardware-Acceleration" class="nav-cta" target="_blank"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>GitHub</a>
+    </nav>
+
+    <section class="hero"><div>
+        <div class="hero-badge">Hardware Acceleration Research</div>
+        <h1>Neural networks,<br><span class="gradient">3× smaller.</span></h1>
+        <p class="hero-desc">L-Mul replaces expensive floating-point multiplication with simple addition in log-space. Same accuracy. 66% less silicon. Dramatically reduced power.</p>
+        <div class="hero-btns"><a href="#results" class="btn btn-primary">View Results →</a><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration" class="btn btn-secondary" target="_blank">GitHub</a></div>
+        <div class="hero-stats">
+            <div class="stat-card"><div class="stat-value" data-target="66.8">0%</div><div class="stat-label">Area Reduction</div><div class="stat-detail">180.88 vs 545.03 area units</div></div>
+            <div class="stat-card"><div class="stat-value" data-target="63">0%</div><div class="stat-label">Fewer Cells</div><div class="stat-detail">181 vs 489 standard cells</div></div>
+            <div class="stat-card"><div class="stat-value">&lt;1%</div><div class="stat-label">Accuracy Loss</div><div class="stat-detail">Across MLP, CNN, LSTM, Transformer</div></div>
+            <div class="stat-card"><div class="stat-value">~100×</div><div class="stat-label">Speedup (n=512)</div><div class="stat-detail">gem5 simulation vs IEEE CPU</div></div>
+        </div>
+    </div></section>
+
+    <section id="algorithm"><div class="container">
+        <div class="section-header scroll-animate"><div class="section-badge">How It Works</div><h2 class="section-title">Multiplication → Addition</h2><p class="section-desc">Instead of O(n²) mantissa multiplication, L-Mul exploits logarithmic representation for O(n) addition.</p></div>
+        <div class="algo-grid">
+            <div class="scroll-animate">
+                <h3 style="font-size:1.3rem;margin-bottom:1.5rem;">The Key Insight</h3>
+                <div class="algo-steps">
+                    <div class="algo-step"><div class="step-num">1</div><div class="step-content"><h4>Extract BF16 Fields</h4><p>Split 16-bit input into sign (1), exponent (8), mantissa (7 bits).</p></div></div>
+                    <div class="algo-step"><div class="step-num">2</div><div class="step-content"><h4>Add Instead of Multiply</h4><p>Treat exponent+mantissa as single field. Add with bias correction (0x4080).</p></div></div>
+                    <div class="algo-step"><div class="step-num">3</div><div class="step-content"><h4>Handle Overflow</h4><p>Check carry bits to detect overflow/underflow and saturate.</p></div></div>
+                    <div class="algo-step"><div class="step-num">4</div><div class="step-content"><h4>Apply Correction</h4><p>Add small factor (result/32 + result/64) to improve accuracy.</p></div></div>
+                </div>
+            </div>
+            <div class="code-box scroll-animate">
+                <div class="code-header"><div class="code-dots"><span></span><span></span><span></span></div><span class="code-file">lmul_nn_funcs.py</span></div>
+                <div class="code-body"><pre><span class="kw">def</span> <span class="fn">lmul_bits</span>(a, b):
+    <span class="cm"># Convert to int32 for bit manipulation</span>
+    a_bits = a.view(torch.int32)
+    b_bits = b.view(torch.int32)
+    
+    <span class="cm"># Extract BF16 from upper 16 bits</span>
+    a_bf16 = (a_bits >> <span class="num">16</span>) & <span class="num">0xFFFF</span>
+    b_bf16 = (b_bits >> <span class="num">16</span>) & <span class="num">0xFFFF</span>
+    
+    <span class="cm"># Extract sign and field</span>
+    a_sign = (a_bf16 >> <span class="num">15</span>) & <span class="num">0x1</span>
+    b_sign = (b_bf16 >> <span class="num">15</span>) & <span class="num">0x1</span>
+    a_field = a_bf16 & <span class="num">0x7FFF</span>
+    b_field = b_bf16 & <span class="num">0x7FFF</span>
+    
+    <span class="cm"># L-Mul: Add with bias correction</span>
+    sum_full = a_field + b_field + <span class="num">0x4080</span>
+    carry = (sum_full >> <span class="num">15</span>) & <span class="num">0x3</span>
+    
+    <span class="cm"># Handle overflow</span>
+    field_sel = torch.where(carry == <span class="num">1</span>, sum_full & <span class="num">0x7FFF</span>, <span class="num">0</span>)
+    field_sel = torch.where(carry >= <span class="num">2</span>, <span class="num">0x7FFF</span>, field_sel)
+    
+    <span class="cm"># Pack result</span>
+    s_result = a_sign ^ b_sign
+    result = ((s_result << <span class="num">15</span>) | field_sel) << <span class="num">16</span>
+    result = result.view(torch.float32)
+    
+    <span class="kw">return</span> result + (result / <span class="num">32</span>) + (result / <span class="num">64</span>)</pre></div>
+            </div>
+        </div>
+    </div></section>
+
+    <section id="results"><div class="container">
+        <div class="section-header scroll-animate"><div class="section-badge">Benchmarks</div><h2 class="section-title">Accuracy Across Architectures</h2><p class="section-desc">Tested on MLP, CNN, LSTM, and Transformer models. Neural networks tolerate approximation surprisingly well.</p></div>
+        <div class="results-grid scroll-animate">
+            <div class="result-card"><div class="result-header"><h3>📊 Classification Results</h3></div><div class="result-body">
+                <table><thead><tr><th>Model</th><th>Dataset</th><th>FP32</th><th>L-Mul</th><th>Δ</th></tr></thead><tbody>
+                    <tr><td>MLP</td><td>MNIST</td><td class="mono">97.02%</td><td class="mono">97.01%</td><td><span class="diff">−0.01%</span></td></tr>
+                    <tr><td>CNN</td><td>MNIST</td><td class="mono">98.30%</td><td class="mono">98.07%</td><td><span class="diff">−0.23%</span></td></tr>
+                    <tr><td>LSTM</td><td>FashionMNIST</td><td class="mono">83.4%</td><td class="mono">82.8%</td><td><span class="diff">−0.6%</span></td></tr>
+                    <tr><td>LSTM</td><td>KMNIST</td><td class="mono">84.8%</td><td class="mono">84.2%</td><td><span class="diff">−0.6%</span></td></tr>
+                    <tr><td>LSTM</td><td>SeqMNIST</td><td class="mono">95.2%</td><td class="mono">94.6%</td><td><span class="diff">−0.6%</span></td></tr>
+                </tbody></table>
+            </div></div>
+            <div class="result-card"><div class="result-header"><h3>📈 Accuracy Comparison</h3></div><div class="result-body"><div class="chart-container"><canvas id="accuracyChart"></canvas></div></div></div>
+        </div>
+        <div class="results-grid scroll-animate" style="margin-top:3rem">
+            <div class="result-card"><div class="result-header"><h3>🧠 Transformer Perplexity (NanoGPT)</h3></div><div class="result-body">
+                <table><thead><tr><th>Configuration</th><th>Shakespeare</th><th>OpenWebText</th></tr></thead><tbody>
+                    <tr><td>FP32 Baseline</td><td class="mono">4.97</td><td class="mono">~618</td></tr>
+                    <tr><td>Full LMUL</td><td class="mono" style="color:var(--primary)">4.64</td><td class="mono">~618</td></tr>
+                    <tr><td>Causal Attention + MLP</td><td class="mono">4.66</td><td class="mono">—</td></tr>
+                    <tr><td>Causal Attention Only</td><td class="mono">4.89</td><td class="mono">—</td></tr>
+                    <tr><td>MLP + LM Head</td><td class="mono" style="color:var(--primary)">4.55 ✓</td><td class="mono">—</td></tr>
+                    <tr><td>MLP Only</td><td class="mono">4.73</td><td class="mono">—</td></tr>
+                </tbody></table>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-top:1rem">Lower perplexity = better. LMUL shows negligible deviation on both datasets.</p>
+            </div></div>
+            <div class="result-card"><div class="result-header"><h3>📈 Transformer Ablation Chart</h3></div><div class="result-body"><div class="chart-container"><canvas id="transformerChart"></canvas></div></div></div>
+        </div>
+        <div class="metrics-row scroll-animate">
+            <div class="metric-card featured"><div class="metric-value">66.8%</div><div class="metric-label">Area Reduction</div></div>
+            <div class="metric-card"><div class="metric-value">63%</div><div class="metric-label">Fewer Cells</div></div>
+            <div class="metric-card"><div class="metric-value">96.6%</div><div class="metric-label">Prediction Agreement</div></div>
+            <div class="metric-card"><div class="metric-value">500MHz</div><div class="metric-label">Timing Verified</div></div>
+        </div>
+    </div></section>
+
+    <section id="ablation"><div class="container">
+        <div class="section-header scroll-animate"><div class="section-badge">Deep Dive</div><h2 class="section-title">Which Layers Matter Most?</h2><p class="section-desc">We isolated specific components to understand L-Mul sensitivity across architectures.</p></div>
+        <div class="ablation-grid">
+            <div class="ablation-card scroll-animate"><div class="ablation-header"><div><h3>LSTM Ablation</h3><p>Gates vs States on Shakespeare</p></div><span class="ablation-badge">Perplexity</span></div><div class="ablation-body"><div class="ablation-results">
+                <div class="ablation-row baseline"><span class="config">FP32 Baseline</span><span class="value">1.58</span></div>
+                <div class="ablation-row"><span class="config">LMUL Gates Only</span><span class="value">1.58</span></div>
+                <div class="ablation-row"><span class="config">LMUL States Only</span><span class="value">1.55</span></div>
+                <div class="ablation-row best"><span class="config">LMUL Both</span><span class="value">1.54 ✓</span></div>
+            </div><div class="ablation-insight"><strong>Finding:</strong> State operations improved with L-Mul while gates stayed neutral. Suggests regularization effect.</div></div></div>
+            <div class="ablation-card scroll-animate"><div class="ablation-header"><div><h3>CNN Ablation</h3><p>Conv vs FC layers on MNIST</p></div><span class="ablation-badge">Accuracy</span></div><div class="ablation-body"><div class="ablation-results">
+                <div class="ablation-row baseline"><span class="config">FP32 Baseline</span><span class="value">98.30%</span></div>
+                <div class="ablation-row"><span class="config">LMUL Conv Only</span><span class="value">~98.0%</span></div>
+                <div class="ablation-row best"><span class="config">LMUL FC Only</span><span class="value">~98.2% ✓</span></div>
+                <div class="ablation-row"><span class="config">LMUL Both</span><span class="value">98.07%</span></div>
+            </div><div class="ablation-insight"><strong>Finding:</strong> FC layers tolerate L-Mul better. Conv layers accumulate more error across feature maps.</div></div></div>
+            <div class="ablation-card scroll-animate"><div class="ablation-header"><div><h3>Transformer Ablation</h3><p>NanoGPT on Shakespeare</p></div><span class="ablation-badge">Perplexity</span></div><div class="ablation-body"><div class="ablation-results">
+                <div class="ablation-row baseline"><span class="config">Base Perplexity</span><span class="value">4.97</span></div>
+                <div class="ablation-row"><span class="config">Full LMUL</span><span class="value">4.64</span></div>
+                <div class="ablation-row"><span class="config">Causal Attention + MLP</span><span class="value">4.66</span></div>
+                <div class="ablation-row"><span class="config">Causal Attention Only</span><span class="value">4.89</span></div>
+                <div class="ablation-row best"><span class="config">MLP + LM Head</span><span class="value">4.55 ✓</span></div>
+                <div class="ablation-row"><span class="config">MLP Only</span><span class="value">4.73</span></div>
+            </div></div></div>
+            <div class="ablation-card scroll-animate"><div class="ablation-header"><div><h3>Key Insights</h3><p>Hardware design implications</p></div></div><div class="ablation-body">
+                <div class="ablation-insight" style="margin:0 0 .75rem"><strong>LSTM:</strong> State updates benefit from L-Mul. Prioritize state computation paths.</div>
+                <div class="ablation-insight" style="margin:0 0 .75rem"><strong>CNN:</strong> FC layers more tolerant than conv layers. Focus L-Mul on classification heads.</div>
+                <div class="ablation-insight" style="margin:0 0 .75rem"><strong>Transformer:</strong> More L-Mul = lower perplexity! MLP + LM Head performs best.</div>
+                <div class="ablation-insight" style="margin:0"><strong>Overall:</strong> L-Mul may act as implicit regularization. Dense/linear layers are excellent candidates.</div>
+            </div></div>
+        </div>
+    </div></section>
+
+    <section id="hardware"><div class="container">
+        <div class="section-header scroll-animate"><div class="section-badge">Implementation</div><h2 class="section-title">From Simulation to Silicon</h2><p class="section-desc">Multiple implementation paths: synthesis, FPGA, and full-system simulation.</p></div>
+        <div class="hw-grid">
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>Yosys Synthesis</h3><span class="status done">Done</span></div><p>BF16 L-Mul synthesized to Nangate 45nm. 66.8% area reduction, 63% fewer cells. 500MHz timing verified with OpenSTA.</p><div class="hw-tags"><span class="hw-tag">Yosys</span><span class="hw-tag">OpenSTA</span><span class="hw-tag">45nm</span></div></div>
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>Verilog MLP</h3><span class="status done">Done</span></div><p>Full MNIST classifier: nn.Linear(784→128) → ReLU → nn.Linear(128→10). Tested 1000 images with BF16 accumulator.</p><div class="hw-tags"><span class="hw-tag">Vivado</span><span class="hw-tag">Verilog</span><span class="hw-tag">MNIST</span></div></div>
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>gem5 System Sim</h3><span class="status done">Done</span></div><p>Full CPU+accelerator simulation. MMIO data path. ~100× speedup on 512×512 matmul. Cycle counts and DRAM energy measured.</p><div class="hw-tags"><span class="hw-tag">gem5</span><span class="hw-tag">ARM</span><span class="hw-tag">MMIO</span></div></div>
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>HLS Block MatMul</h3><span class="status wip">In Progress</span></div><p>Block matrix multiplication in Vitis HLS with L-Mul. Targeting efficient MLP acceleration.</p><div class="hw-tags"><span class="hw-tag">Vitis HLS</span><span class="hw-tag">Block MatMul</span></div></div>
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>Power Analysis</h3><span class="status wip">In Progress</span></div><p>VCD-based power estimation from RTL simulation. Tracking dynamic and leakage components.</p><div class="hw-tags"><span class="hw-tag">VCD</span><span class="hw-tag">OpenSTA</span><span class="hw-tag">Power</span></div></div>
+            <div class="hw-card scroll-animate"><div class="hw-card-header"><h3>PyTorch L-Mul</h3><span class="status done">Done</span></div><p>Software reference implementation for accuracy testing. Vectorized BF16 operations with bias correction.</p><div class="hw-tags"><span class="hw-tag">PyTorch</span><span class="hw-tag">NumPy</span><span class="hw-tag">Python</span></div></div>
+        </div>
+        <div class="gem5-results scroll-animate"><div class="gem5-header"><h3>gem5 Simulation Results</h3><p>LMUL accelerator (MMIO) vs IEEE CPU-only BF16 matmul. ARM TimingSimpleCPU @ 2GHz, 512MB DDR3.</p></div>
+            <div class="gem5-table-wrap"><table class="gem5-table"><thead><tr><th>Metric</th><th>n=4 LMUL</th><th>n=4 IEEE</th><th>n=64 LMUL</th><th>n=64 IEEE</th><th>n=512 LMUL</th><th>n=512 IEEE</th></tr></thead><tbody>
+                <tr><td>Sim Time (s)</td><td>0.00055</td><td>0.00061</td><td>0.015</td><td>0.202</td><td class="hl">0.93</td><td>95.8</td></tr>
+                <tr><td>CPU Cycles</td><td>1.09M</td><td>1.22M</td><td>30.3M</td><td>404M</td><td class="hl">1.86B</td><td>191.5B</td></tr>
+                <tr><td>Instructions</td><td>8.2k</td><td>9.1k</td><td>199k</td><td>2.82M</td><td class="hl">12.2M</td><td>1.35B</td></tr>
+                <tr><td>DRAM Energy (μJ)</td><td>667k</td><td>743k</td><td>17.4M</td><td>239M</td><td class="hl">1.07e9</td><td>1.17e11</td></tr>
+                <tr><td>Speedup</td><td colspan="2" style="text-align:center">1.1×</td><td colspan="2" style="text-align:center">13.5×</td><td colspan="2" style="text-align:center;color:var(--primary);font-weight:700">~103×</td></tr>
+            </tbody></table></div>
+        </div>
+    </div></section>
+
+    <section id="team"><div class="container">
+        <div class="section-header scroll-animate"><div class="section-badge">The Team</div><h2 class="section-title">Who's Building This</h2><p class="section-desc">A collaborative effort between hardware and software teams at UC San Diego.</p></div>
+        <div class="team-grid">
+            <div class="team-card scroll-animate"><div class="team-avatar">O</div><h4>Owen Shi</h4><p class="role">gem5 / System Simulation</p></div>
+            <div class="team-card scroll-animate"><div class="team-avatar">E</div><h4>Edgar Guzman</h4><p class="role">Verilog MLP / Vivado</p></div>
+            <div class="team-card scroll-animate"><div class="team-avatar">I</div><h4>Idhant Kumar</h4><p class="role">Synthesis / Power Analysis</p></div>
+            <div class="team-card scroll-animate"><div class="team-avatar">B</div><h4>Brendan Kuang</h4><p class="role">NanoGPT / Transformers</p></div>
+            <div class="team-card scroll-animate"><div class="team-avatar">B</div><h4>Brandon Chiou</h4><p class="role">HLS / Block Matrix</p></div>
+            <div class="team-card scroll-animate"><div class="team-avatar">P</div><h4>Pranav Kumarsubha</h4><p class="role">Ablation / Website</p></div>
+        </div>
+        <div class="advisor scroll-animate"><p>Advised by <strong>Professor Rajesh Gupta</strong></p><p style="margin-top:.5rem;font-size:.85rem">Halıcıoğlu Data Science Institute, UC San Diego</p></div>
+    </div></section>
+
+    <footer><div class="footer-container">
+        <div><div class="logo" style="font-size:1.2rem">L-Mul</div><p class="footer-text">DSC 180B · Winter 2026</p></div>
+        <div class="footer-links"><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration" target="_blank">GitHub</a><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/NNs" target="_blank">Notebooks</a><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/rtl" target="_blank">Verilog</a><a href="https://datascience.ucsd.edu/" target="_blank">HDSI</a></div>
+    </div></footer>
+
+    <script>
+        // Particles
+        const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d');let particles=[];
+        function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+        function create(){return{x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,r:Math.random()*1.5+.5,o:Math.random()*.4+.1}}
+        function init(){particles=[];for(let i=0;i<Math.floor(canvas.width*canvas.height/20000);i++)particles.push(create())}
+        function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);particles.forEach((p,i)=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,136,${p.o})`;ctx.fill();particles.forEach((p2,j)=>{if(i===j)return;const d=Math.hypot(p.x-p2.x,p.y-p2.y);if(d<100){ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p2.x,p2.y);ctx.strokeStyle=`rgba(0,255,136,${.06*(1-d/100)})`;ctx.stroke()}})});requestAnimationFrame(draw)}
+        resize();init();draw();addEventListener('resize',()=>{resize();init()});
+
+        // Scroll animations
+        const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')})},{threshold:.1});
+        document.querySelectorAll('.scroll-animate').forEach(el=>obs.observe(el));
+
+        // Counter animation
+        function animateCounters(){document.querySelectorAll('.stat-value[data-target]').forEach(el=>{const t=parseFloat(el.dataset.target),d=2000,s=performance.now();function u(n){const p=Math.min((n-s)/d,1),e=1-Math.pow(1-p,3);el.textContent=(t*e).toFixed(1)+'%';if(p<1)requestAnimationFrame(u)}requestAnimationFrame(u)})}
+        const cObs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting&&!x.target.classList.contains('counted')){x.target.classList.add('counted');animateCounters()}})},{threshold:.5});
+        document.querySelectorAll('.hero-stats').forEach(el=>cObs.observe(el));
+
+        // Chart
+        new Chart(document.getElementById('accuracyChart'),{type:'bar',data:{labels:['MLP','CNN','LSTM Fashion','LSTM KMNIST','LSTM Seq'],datasets:[{label:'FP32',data:[97.02,98.30,83.4,84.8,95.2],backgroundColor:'rgba(99,102,241,0.8)',borderRadius:4},{label:'L-Mul',data:[97.01,98.07,82.8,84.2,94.6],backgroundColor:'rgba(0,255,136,0.8)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#a0a0a0'}}},scales:{y:{min:75,max:100,ticks:{color:'#666'},grid:{color:'rgba(255,255,255,0.05)'}},x:{ticks:{color:'#666'},grid:{display:false}}}}});
+
+        // Transformer Chart
+        new Chart(document.getElementById('transformerChart'),{type:'bar',data:{labels:['Base','Full LMUL','Attn+MLP','Attn Only','MLP+Head','MLP Only'],datasets:[{label:'Perplexity',data:[4.97,4.64,4.66,4.89,4.55,4.73],backgroundColor:['rgba(99,102,241,0.8)','rgba(0,255,136,0.8)','rgba(0,255,136,0.7)','rgba(0,255,136,0.6)','rgba(0,255,136,0.9)','rgba(0,255,136,0.5)'],borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true,text:'Shakespeare Perplexity (lower = better)',color:'#a0a0a0'}},scales:{y:{min:4.4,max:5.1,ticks:{color:'#666'},grid:{color:'rgba(255,255,255,0.05)'}},x:{ticks:{color:'#666',font:{size:10}},grid:{display:false}}}}});
+    </script>
+</body>
+</html>
