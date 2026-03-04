@@ -100,7 +100,8 @@ class LMulSystem(System):
             self.cpu = TimingSimpleCPU()
         else:
             raise ValueError(f"Unsupported cpu_model '{cpu_model}' (expected 'timing' or 'o3')")
-        self.cpu_model = cpu_model_norm
+        # Do not set self.cpu_model: LMulSystem extends System (SimObject), which only allows
+        # registered parameters; storing cpu_model would trigger "Invalid assignment for Class LMulSystem with parameter cpu_model".
 
         # Optional first-order CPU power model (emits system.cpu.power_model.* stats).
         if enable_cpu_power_model:
