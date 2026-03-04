@@ -81,6 +81,7 @@ class LMulSystem(System):
         self,
         pe_rows=4,
         pe_cols=4,
+        cpu_model="timing",
         use_accelerator=True,
         enable_cpu_power_model=True,
         cpu_dyn_energy_per_cycle_pj=500.0,
@@ -91,8 +92,15 @@ class LMulSystem(System):
         super().__init__(**kwargs)
         
         # CPU - must be created as a child of System (not an attribute)
-        # This ensures proper parenting in the SimObject hierarchy
-        self.cpu = TimingSimpleCPU()
+        # This ensures proper parenting in the SimObject hierarchy.
+        cpu_model_norm = (cpu_model or "timing").lower()
+        if cpu_model_norm == "o3":
+            self.cpu = DerivO3CPU()
+        elif cpu_model_norm == "timing":
+            self.cpu = TimingSimpleCPU()
+        else:
+            raise ValueError(f"Unsupported cpu_model '{cpu_model}' (expected 'timing' or 'o3')")
+        self.cpu_model = cpu_model_norm
 
         # Optional first-order CPU power model (emits system.cpu.power_model.* stats).
         if enable_cpu_power_model:
@@ -151,6 +159,7 @@ def createSystem(args):
     system = LMulSystem(
         pe_rows=args.pe_rows,
         pe_cols=args.pe_cols,
+        cpu_model=args.cpu_model,
         use_accelerator=not args.use_ieee,
         enable_cpu_power_model=not args.disable_cpu_power_model,
         cpu_dyn_energy_per_cycle_pj=args.cpu_dyn_energy_per_cycle_pj,
@@ -209,6 +218,9 @@ def main():
                        help='Use IEEE BF16 instead of LMUL')
     parser.add_argument('--cpu-clock', type=str, default='2GHz',
                        help='CPU clock frequency (default: 2GHz)')
+    parser.add_argument('--cpu-model', type=str, default='timing',
+                       choices=['timing', 'o3'],
+                       help='CPU model: timing (TimingSimpleCPU) or o3 (DerivO3CPU), default: timing')
     parser.add_argument('--accel-clock', type=str, default='2GHz',
                        help='LMUL accelerator clock frequency (default: 2GHz)')
     parser.add_argument('--disable-cpu-power-model', action='store_true',
@@ -311,10 +323,13 @@ def main():
     if "lmul_accel" in system._children:
         print(
             f"Starting simulation with {args.pe_rows}x{args.pe_cols} PE array "
-            f"(LMUL Accelerator, CPU={args.cpu_clock}, ACCEL={args.accel_clock})"
+            f"(LMUL Accelerator, CPU={args.cpu_model}@{args.cpu_clock}, ACCEL={args.accel_clock})"
         )
     else:
-        print(f"Starting simulation (Native CPU IEEE BF16 - no accelerator, CPU={args.cpu_clock})")
+        print(
+            f"Starting simulation (Native CPU IEEE BF16 - no accelerator, "
+            f"CPU={args.cpu_model}@{args.cpu_clock})"
+        )
     if args.cmd:
         print(f"Running: {args.cmd} {' '.join(args.cmd_args)}")
     

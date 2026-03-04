@@ -151,11 +151,13 @@ cat gem5-sim/lmul_vs_ieee_comparison/performance_comparison_4.txt
 
 ```bash
 ./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64 --pe-rows 4 --pe-cols 4
+./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64 --cpu-model o3
 ./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 128 --no-output-extraction
 ```
 
 - `--size N` — N×N matrices  
 - `--pe-rows N`, `--pe-cols N` — PE array dimensions  
+- `--cpu-model MODEL` — CPU model (`timing` or `o3`, default: `o3`)  
 - `--accel-clock FREQ` — accelerator clock frequency (default: `2GHz`)  
 - `--no-output-extraction` — skip writing `result.bin`/`inputs.bin` and correctness validation (faster, for performance-only)  
 - `--include-cpu-lmul` — also run CPU LMUL simulation for three-way comparison (default: off)
@@ -231,7 +233,13 @@ In `cpu_matrix_multiply`, the inner loop over `k` is scalar (`sum += a_row[k] * 
 
 ### Step 4: Switch to O3 CPU
 
-In `gem5-sim/configs/lmul_system.py`, replace `TimingSimpleCPU()` with `DerivO3CPU()` (or the appropriate O3 class for your gem5 version). Out-of-order execution will increase IPC (e.g. from ~0.01 to 0.5 or higher), so the same instruction stream will complete in fewer cycles. Note: O3 simulation is slower and uses more memory; large sizes (e.g. 1024) may require more host RAM and time.
+Use the CPU-model flag across the pipeline:
+
+```bash
+./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 1024 --cpu-model o3
+```
+
+Under the hood this selects `DerivO3CPU` in `gem5-sim/configs/lmul_system.py`. Out-of-order execution increases IPC (e.g. from ~0.01 to 0.5 or higher), so the same instruction stream completes in fewer cycles. Note: O3 simulation is slower and uses more memory; large sizes (e.g. 1024) may require more host RAM and time.
 
 ### Step 5: Document both baselines
 

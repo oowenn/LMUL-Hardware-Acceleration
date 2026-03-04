@@ -3,6 +3,8 @@
 # Run a single gem5 simulation: either LMUL (accelerator) or IEEE (CPU).
 # For comparing LMUL vs IEEE (two runs + metrics), use compare_lmul_vs_ieee.sh.
 #
+# CPU model defaults to o3 in this wrapper (override with --cpu-model timing).
+#
 
 set -e
 
@@ -17,6 +19,7 @@ PE_ROWS=4
 PE_COLS=4
 USE_IEEE=0
 MATRIX_SIZE=8
+CPU_MODEL="${CPU_MODEL:-o3}"
 OUTPUT_DIR="${LMUL_GEM5}/m5out"
 BENCHMARK="matrix_multiply"
 USE_NO_PRINTF=1
@@ -32,6 +35,7 @@ usage() {
     echo "  --pe-rows N         PE array rows (default: 4)"
     echo "  --pe-cols N         PE array columns (default: 4)"
     echo "  --size N            Matrix size NxN (default: 8)"
+    echo "  --cpu-model MODEL   CPU model: timing | o3 (default: o3)"
     echo "  --ieee              Use IEEE BF16 instead of LMUL"
     echo "  --benchmark NAME    Benchmark to run (default: matrix_multiply)"
     echo "  --no-printf         Use matrix_multiply_no_printf.arm (avoids syscall 403; default)"
@@ -70,6 +74,10 @@ while [[ $# -gt 0 ]]; do
             MATRIX_SIZE="$2"
             shift 2
             ;;
+        --cpu-model)
+            CPU_MODEL="$2"
+            shift 2
+            ;;
         --ieee)
             USE_IEEE=1
             shift
@@ -103,6 +111,14 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "$CPU_MODEL" in
+    timing|o3) ;;
+    *)
+        echo "Error: invalid --cpu-model '$CPU_MODEL' (expected 'timing' or 'o3')"
+        exit 1
+        ;;
+esac
 
 # Check gem5 exists - try opt first, fall back to debug (for Codespaces)
 if [ -f "${GEM5_ROOT}/build/ARM/gem5.opt" ]; then
@@ -146,6 +162,7 @@ echo "gem5 LMUL Accelerator Simulation"
 echo "========================================"
 echo "Configuration:"
 echo "  PE Array: ${PE_ROWS}x${PE_COLS}"
+echo "  CPU Model: ${CPU_MODEL}"
 echo "  Mode: $([ $USE_IEEE -eq 1 ] && echo 'IEEE BF16' || echo 'LMUL')"
 echo "  Matrix Size: ${MATRIX_SIZE}x${MATRIX_SIZE}"
 echo "  Benchmark: $(basename "$BENCHMARK_BIN")"
@@ -164,6 +181,7 @@ GEM5_ARGS=(
 CONFIG_ARGS=(
     --pe-rows="$PE_ROWS"
     --pe-cols="$PE_COLS"
+    --cpu-model="$CPU_MODEL"
     --cmd="$BENCHMARK_BIN"
     --cmd-args
     "$MATRIX_SIZE"
