@@ -4,12 +4,13 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import re
+import subprocess
 
 
 def parse_performance_comparison_txt(path: Path, size: int):
-    text = path.read_text()
     section_sep = "----------------------------------------------------------------------"
-    final_metric_lines = text.split(section_sep)[1].strip().splitlines()
+    text = path.read_text().split(section_sep)
+    final_metric_lines = text[1].strip().splitlines()
     rows = []
     paths = None
     regex = r'\s{2,}'
@@ -28,7 +29,123 @@ def parse_performance_comparison_txt(path: Path, size: int):
             for i in range(len(rows)):
                 rows[i]['Energy (µJ)'] = float(re.split(regex, line)[i + 1].strip())
             break
+    # Optionally enrich rows with per-path instruction counts from the Performance Details section.
+    # This lets downstream callers swap CPU Cycles for Instructions without changing the text format.
+    if len(text) > 2 and rows:
+        details_lines = text[2].strip().splitlines()
+        for line in details_lines:
+            line = line.strip()
+            if line.startswith("Instructions"):
+                parts = re.split(regex, line)
+                for i in range(len(rows)):
+                    rows[i]["Instructions"] = int(parts[i + 1].strip().replace(",", ""))
+                break
     return rows
+
+
+def validate_all_runs(gem5_sim: Path, sizes):
+    """
+    Validate LMUL, CPU LMUL, and IEEE runs for each size using validate_result_against_reference.py.
+    Mirrors the logic previously embedded in workflow.ipynb.
+    """
+    validate_script = gem5_sim / "scripts" / "validate_result_against_reference.py"
+    results_root = gem5_sim / "lmul_vs_ieee_comparison"
+
+    for n in sizes:
+        run_dirs = {
+            "lmul": results_root / "lmul",
+            "ieee": results_root / "ieee",
+            "cpu_lmul": results_root / "cpu_lmul",
+        }
+        size_result = f"result_{n}.bin"
+        size_inputs = f"inputs_{n}.bin"
+
+        print(f"\n=== Validation for size {n} ===")
+
+        # LMUL accelerator vs LMUL software reference
+        if run_dirs["lmul"].is_dir():
+            print("[LMUL Accel vs LMUL reference]")
+            result_path = run_dirs["lmul"] / size_result
+            inputs_path = run_dirs["lmul"] / size_inputs
+            if not result_path.is_file() and (run_dirs["lmul"] / "result.bin").is_file():
+                result_path = run_dirs["lmul"] / "result.bin"
+                inputs_path = run_dirs["lmul"] / "inputs.bin"
+            if result_path.is_file() and inputs_path.is_file():
+                subprocess.run(
+                    [
+                        "python3",
+                        str(validate_script),
+                        str(run_dirs["lmul"]),
+                        "--mode",
+                        "lmul",
+                        "--result",
+                        str(result_path),
+                        "--inputs",
+                        str(inputs_path),
+                    ],
+                    cwd=gem5_sim,
+                    check=False,
+                )
+            else:
+                print(f"Missing LMUL artifacts for size {n}; skipping ({result_path.name}, {inputs_path.name}).")
+        else:
+            print("LMUL run directory missing; skipping.")
+
+        # CPU LMUL (if present)
+        if run_dirs["cpu_lmul"].is_dir():
+            print("[CPU LMUL vs LMUL reference]")
+            result_path = run_dirs["cpu_lmul"] / size_result
+            inputs_path = run_dirs["cpu_lmul"] / size_inputs
+            if not result_path.is_file() and (run_dirs["cpu_lmul"] / "result.bin").is_file():
+                result_path = run_dirs["cpu_lmul"] / "result.bin"
+                inputs_path = run_dirs["cpu_lmul"] / "inputs.bin"
+            if result_path.is_file() and inputs_path.is_file():
+                subprocess.run(
+                    [
+                        "python3",
+                        str(validate_script),
+                        str(run_dirs["cpu_lmul"]),
+                        "--mode",
+                        "lmul",
+                        "--result",
+                        str(result_path),
+                        "--inputs",
+                        str(inputs_path),
+                    ],
+                    cwd=gem5_sim,
+                    check=False,
+                )
+            else:
+                print(f"Missing CPU LMUL artifacts for size {n}; skipping ({result_path.name}, {inputs_path.name}).")
+
+        # IEEE CPU vs IEEE software reference
+        if run_dirs["ieee"].is_dir():
+            print("[IEEE CPU vs IEEE reference]")
+            result_path = run_dirs["ieee"] / size_result
+            inputs_path = run_dirs["ieee"] / size_inputs
+            if not result_path.is_file() and (run_dirs["ieee"] / "result.bin").is_file():
+                result_path = run_dirs["ieee"] / "result.bin"
+                inputs_path = run_dirs["ieee"] / "inputs.bin"
+            if result_path.is_file() and inputs_path.is_file():
+                subprocess.run(
+                    [
+                        "python3",
+                        str(validate_script),
+                        str(run_dirs["ieee"]),
+                        "--mode",
+                        "ieee",
+                        "--result",
+                        str(result_path),
+                        "--inputs",
+                        str(inputs_path),
+                    ],
+                    cwd=gem5_sim,
+                    check=False,
+                )
+            else:
+                print(f"Missing IEEE artifacts for size {n}; skipping ({result_path.name}, {inputs_path.name}).")
+        else:
+            print("IEEE run directory missing; skipping.")
 
 # Merge Size cell (0,0) with the cell below (1,0)
 def mergecells(table, ix0, ix1):
@@ -79,13 +196,13 @@ def merge_header_triplet(table, row, col_start, label, fig, ax):
 
 
 def plot_table(sizes, core, save_fig=False):
-    metric_names = ["Simulation Time (s)", "CPU Cycles (millions)", "Estimated Total Energy (J)"]
-    metric_cols = ["Sim Time (s)", "CPU Cycles", "Energy (µJ)"]
+    metric_names = ["Simulation Time (s)", "Instructions (millions)", "Estimated Total Energy (J)"]
+    metric_cols = ["Sim Time (s)", "Instructions", "Energy (µJ)"]
 
     def fmt_val(m, val):
         if m == "Sim Time (s)":
             return f"{val:.6f}"
-        if m == "CPU Cycles":
+        if m == "Instructions":
             return f"{(val / 1e6):,.3f}"
         if m == "Energy (µJ)":
             return f"{(val / 1e6):,.6f}"
