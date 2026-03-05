@@ -72,54 +72,6 @@ class CpuPowerModel(PowerModel):
         ]
 
 
-class L1ICache(Cache):
-    """Private L1 instruction cache."""
-
-    assoc = 2
-    tag_latency = 2
-    data_latency = 2
-    response_latency = 2
-    mshrs = 4
-    tgts_per_mshr = 20
-    is_read_only = True
-    writeback_clean = True
-
-    def __init__(self, size="32kB", **kwargs):
-        super().__init__(**kwargs)
-        self.size = size
-
-
-class L1DCache(Cache):
-    """Private L1 data cache."""
-
-    assoc = 2
-    tag_latency = 2
-    data_latency = 2
-    response_latency = 2
-    mshrs = 4
-    tgts_per_mshr = 20
-
-    def __init__(self, size="32kB", **kwargs):
-        super().__init__(**kwargs)
-        self.size = size
-
-
-class L2UnifiedCache(Cache):
-    """Shared unified L2 cache."""
-
-    assoc = 8
-    tag_latency = 20
-    data_latency = 20
-    response_latency = 20
-    mshrs = 20
-    tgts_per_mshr = 12
-    write_buffers = 8
-
-    def __init__(self, size="256kB", **kwargs):
-        super().__init__(**kwargs)
-        self.size = size
-
-
 class LMulSystem(System):
     """
     Simple system with LMUL accelerator attached
@@ -130,10 +82,6 @@ class LMulSystem(System):
         pe_rows=4,
         pe_cols=4,
         cpu_model="timing",
-        use_caches=True,
-        l1i_size="32kB",
-        l1d_size="32kB",
-        l2_size="256kB",
         use_accelerator=True,
         enable_cpu_power_model=True,
         cpu_dyn_energy_per_cycle_pj=500.0,
@@ -169,29 +117,10 @@ class LMulSystem(System):
                 subsystem=self.cpu_power_subsystem,
             )
         
-        # Memory interconnect
+        # Memory
         self.membus = SystemXBar()
-        self.cpu.createInterruptController()
-
-        if use_caches:
-            # Private split L1s + shared L2.
-            self.cpu.icache = L1ICache(size=l1i_size)
-            self.cpu.dcache = L1DCache(size=l1d_size)
-            self.cpu.addPrivateSplitL1Caches(self.cpu.icache, self.cpu.dcache)
-
-            self.l2bus = L2XBar()
-            self.l2cache = L2UnifiedCache(size=l2_size)
-            self.l2cache.cpu_side = self.l2bus.mem_side_ports
-            self.l2cache.mem_side = self.membus.cpu_side_ports
-
-            self.cpu.connectAllPorts(
-                self.l2bus.cpu_side_ports,
-                self.membus.cpu_side_ports,
-                self.membus.mem_side_ports,
-            )
-        else:
-            # Conservative baseline: no caches, CPU directly on membus.
-            self.cpu.connectBus(self.membus)
+        self.cpu.icache_port = self.membus.cpu_side_ports
+        self.cpu.dcache_port = self.membus.cpu_side_ports
         
         # LMUL Accelerator (only create if use_accelerator=True)
         # For IEEE comparison, we don't create the accelerator - CPU does it natively
@@ -205,12 +134,10 @@ class LMulSystem(System):
             )
             # Connect accelerator to memory bus
             self.lmul_accel.pio = self.membus.mem_side_ports
-            if use_caches:
-                # With caches enabled, route DMA through the L2-side fabric so
-                # all masters enter memory through one coherent path.
-                self.lmul_accel.dma = self.l2bus.cpu_side_ports
-            else:
-                self.lmul_accel.dma = self.membus.cpu_side_ports
+            self.lmul_accel.dma = self.membus.cpu_side_ports
+        
+        # Interrupt controller
+        self.cpu.createInterruptController()
         
         # Memory controller
         self.mem_ctrl = MemCtrl()
@@ -234,10 +161,6 @@ def createSystem(args):
         pe_rows=args.pe_rows,
         pe_cols=args.pe_cols,
         cpu_model=args.cpu_model,
-        use_caches=not args.disable_caches,
-        l1i_size=args.l1i_size,
-        l1d_size=args.l1d_size,
-        l2_size=args.l2_size,
         use_accelerator=not args.use_ieee,
         enable_cpu_power_model=not args.disable_cpu_power_model,
         cpu_dyn_energy_per_cycle_pj=args.cpu_dyn_energy_per_cycle_pj,
@@ -299,14 +222,6 @@ def main():
     parser.add_argument('--cpu-model', type=str, default='timing',
                        choices=['timing', 'o3'],
                        help='CPU model: timing (TimingSimpleCPU) or o3 (DerivO3CPU), default: timing')
-    parser.add_argument('--disable-caches', action='store_true',
-                       help='Disable CPU caches (default: caches enabled)')
-    parser.add_argument('--l1i-size', type=str, default='32kB',
-                       help='L1 instruction-cache size (default: 32kB)')
-    parser.add_argument('--l1d-size', type=str, default='32kB',
-                       help='L1 data-cache size (default: 32kB)')
-    parser.add_argument('--l2-size', type=str, default='256kB',
-                       help='Unified L2 cache size (default: 256kB)')
     parser.add_argument('--accel-clock', type=str, default='2GHz',
                        help='LMUL accelerator clock frequency (default: 2GHz)')
     parser.add_argument('--disable-cpu-power-model', action='store_true',
@@ -418,13 +333,6 @@ def main():
         )
     if args.cmd:
         print(f"Running: {args.cmd} {' '.join(args.cmd_args)}")
-    if args.disable_caches:
-        print("Cache hierarchy: OFF (CPU directly connected to membus)")
-    else:
-        print(
-            f"Cache hierarchy: L1I={args.l1i_size}, L1D={args.l1d_size}, "
-            f"L2={args.l2_size}"
-        )
     
     print("Beginning simulation...", flush=True)
     
