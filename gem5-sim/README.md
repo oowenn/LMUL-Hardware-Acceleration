@@ -39,9 +39,10 @@ gem5-sim/
 │   ├── performance_comparison_*.txt
 │   ├── lmul/                 # LMUL accelerator run stats + logs
 │   └── ieee/                 # IEEE CPU run stats + logs
-├── infra/                    # Cluster/container helpers (e.g., Expanse, Singularity)
-│   ├── Singularity.def
-│   └── requirements.txt
+├── infra/                    # Cluster/container helpers (Docker, Singularity)
+│   ├── Dockerfile            # Docker image (mirrors Singularity.def)
+│   ├── Singularity.def       # Singularity/Apptainer image definition
+│   └── requirements.txt      # Python deps for workflow/analysis
 └── workflow.ipynb            # End-to-end setup and LMUL vs IEEE workflow (start here)
 ```
 
@@ -51,12 +52,70 @@ gem5-sim/
 
 - **RAM**: 32GB+ recommended (16GB minimum; linker may fail with less).
 - **Disk**: 50GB+ free.
-- **OS**: Linux (e.g. Ubuntu 20.04+), x86_64.
-- **Software**: `git`, `python3` (3.6+), `scons` (e.g. `pip install scons`), and for building benchmarks: **ARM cross-compiler** `gcc-arm-linux-gnueabihf` (`sudo apt-get install gcc-arm-linux-gnueabihf`).
+- **OS**: Linux (e.g. Ubuntu 20.04+), x86_64. macOS/x86 can run the workflow for analysis; building gem5 is Linux-only (or use a container).
+
+### Software
+
+**Option A — Container (recommended):** Use the image built from `infra/Dockerfile` or `infra/Singularity.def`. No host install of build tools required beyond Docker or Singularity.
+
+**Option B — Native Linux:** On the host you need:
+
+- **Build / system:** `git`, `build-essential`, `make`, `m4`, `scons`, `pkg-config`, `zlib1g-dev`, `libprotobuf-dev`, `protobuf-compiler`, `libpng-dev`, `libhdf5-dev`, `libgoogle-perftools-dev`, `libboost-all-dev`, `python3` (3.6+), `python3-pip`, `python3-dev`, `python3-venv`
+- **Benchmark (ARM):** ARM cross-compiler, e.g. `gcc-arm-linux-gnueabihf` and `libc6-dev-armhf-cross` (`sudo apt-get install gcc-arm-linux-gnueabihf libc6-dev-armhf-cross`)
+
+Python packages used by the workflow and scripts: `scons`, `numpy`, `matplotlib`, `pandas`, `scipy`, `jupyter`, `jupyterlab`, `ipykernel` (see `infra/requirements.txt`). Install with `pip install -r gem5-sim/infra/requirements.txt` (from repo root).
 
 ---
 
-## Setup and Workflow
+## Setup
+
+Pick one of the following, then run **workflow.ipynb** for the full flow (clone gem5, install model, build benchmark, run comparisons, plot).
+
+### 1. Docker
+
+From the **repo root** (`LMUL-Hardware-Acceleration/`):
+
+```bash
+# Build the image (one-time)
+docker build -t gem5-lmul -f gem5-sim/infra/Dockerfile gem5-sim/infra
+
+# Run a shell with the repo mounted; run workflow from inside
+docker run -it --rm -v "$(pwd):/workspace" -w /workspace gem5-lmul bash
+# Then inside the container: cd gem5-sim && jupyter lab workflow.ipynb
+# Or run setup and comparison steps from the notebook / scripts manually.
+```
+
+For Jupyter in the browser, map the port and set the token:
+
+```bash
+docker run -it --rm -v "$(pwd):/workspace" -w /workspace -p 8888:8888 \
+  gem5-lmul jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+```
+
+### 2. Singularity (e.g. Expanse / HPC)
+
+From the **repo root**:
+
+```bash
+# Build the image (one-time)
+singularity build gem5-lmul.sif gem5-sim/infra/Singularity.def
+
+# Run with repo bound; use workflow.ipynb or scripts from inside
+singularity exec -B "$(pwd):/workspace" --pwd /workspace gem5-lmul.sif bash
+# Inside: cd gem5-sim && run your workflow / install_model.sh etc.
+```
+
+### 3. Native (Linux host)
+
+1. Install the system and Python packages listed under **Prerequisites (Software — Option B)**.
+2. Clone gem5 next to this repo if needed: from repo root, `git clone https://github.com/gem5/gem5.git` (so that `gem5/` and `gem5-sim/` are siblings under `LMUL-Hardware-Acceleration/`).
+3. Open and run **workflow.ipynb** (from repo root or with `gem5-sim/` as cwd). The notebook will install the LMUL model into gem5, build the benchmark, and run comparisons.
+
+Optional one-time checks: `./gem5-sim/scripts/check_compatibility.sh`, `./gem5-sim/scripts/check_gem5_dependencies.sh`.
+
+---
+
+## Workflow
 
 **Run the notebook** `workflow.ipynb` (from the repo root or with `gem5-sim/` as the working directory). It walks through:
 
@@ -118,7 +177,7 @@ To calibrate parameters for a specific target, consult vendor datasheets or meas
 
 | Problem | What to do |
 |--------|------------|
-| **zlib missing** | `./gem5-sim/scripts/check_zlib.sh`; install with `sudo apt-get install zlib1g-dev`. |
+| **zlib missing** | Install with `sudo apt-get install zlib1g-dev` (or use the Docker/Singularity image). |
 | **Linker OOM** | Build on a machine with 32GB+ RAM. |
 | **Syscall 403** | Use the no-printf benchmark: `make matrix_multiply_no_printf.arm` in `gem5-sim/benchmarks/matrix_multiply`. |
 | **Empty stats.txt** | Check `lmul_vs_ieee_comparison/lmul/simulation.log` (or `ieee/`) for errors; ensure the benchmark binary exists. |

@@ -2,7 +2,7 @@
 
 ## Setup
 
-Install Docker, clone the repository, and choose a setup method. The image is built from the root `Dockerfile` and includes dependencies for RTL/synthesis, notebooks, and **gem5-sim** (build tools for the gem5 accelerator workflow; see [gem5-sim/README.md](gem5-sim/README.md)).
+Install Docker, clone the repository, and choose a setup method. The image is built from the root `Dockerfile` and includes universal dependencies for using all components of the repo: RTL/synthesis, notebooks, NNs, and gem5-sim.
 
 ### 1) VS Code
 
@@ -72,27 +72,22 @@ Contains reproducible notebooks (after container setup) for LMUL accuracy analys
 - `transformerLMUL.ipynb`
   - Jupyter Notebook for testing NanoGPT scripts and perplexity analysis. 
 
-### gem5 Full-System Simulation (`gem5-sim/`)
+### gem5 Simulation (`gem5-sim/`)
 
-Complete gem5 integration for full-system simulation of LMUL accelerator in realistic system contexts.
+gem5 integration for simulating the LMUL BF16 accelerator and comparing it to native IEEE BF16 on the CPU (syscall-emulation mode).
 
 **Purpose**: Evaluate LMUL accelerator performance with:
-- Real CPU-accelerator interaction
-- Memory hierarchy modeling
-- System-level metrics (bandwidth, latency, cache effects)
-- End-to-end application performance
+- CPU–accelerator interaction and memory-mapped I/O
+- Configurable PE array and cycle-accurate timing
+- LMUL vs IEEE (and optional CPU LMUL) comparison with performance and correctness checks
 
-**Key Components**:
-- `gem5-sim/models/` - C++ device model for LMUL accelerator
-- `gem5-sim/configs/` - System configurations (CPU + memory + accelerator)
-- `gem5-sim/benchmarks/` - Test programs (matrix multiply, NN layers, etc.)
-- `gem5-sim/scripts/` - Automation scripts for building and running
+**Key components**:
+- `gem5-sim/workflow.ipynb` — End-to-end flow: clone gem5, install model, build benchmark, run comparisons, validate, plot (start here)
+- `gem5-sim/models/` — gem5 device model (C++ + Python + SConscript)
+- `gem5-sim/configs/` — System config (e.g. `lmul_system.py`)
+- `gem5-sim/benchmarks/matrix_multiply/` — BF16 matrix-multiply benchmark (ARM cross-compiled)
+- `gem5-sim/scripts/` — Install, run, and comparison scripts
+- `gem5-sim/utils/` — Python utilities for parsing and plotting results
+- `gem5-sim/infra/` — Docker and Singularity definitions for reproducible envs
 
-**Quick Start**: See [gem5-sim/README.md](gem5-sim/README.md) for prerequisites, setup, and workflow.
-
-**Features**:
-- Memory-mapped accelerator device
-- Configurable PE array (4x4, 8x8, 16x16, etc.)
-- Cycle-accurate timing model
-- LMUL vs IEEE BF16 comparison
-- Comprehensive statistics collection
+**Setup**: Recommended to follow [gem5-sim/README.md](gem5-sim/README.md) for isolated setup of gem5-sim dependencies. Use **workflow.ipynb** after one of: **Docker** (build from `infra/Dockerfile`), **Singularity** (build from `infra/Singularity.def`), or **native Linux** (install deps from README).

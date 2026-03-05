@@ -51,7 +51,9 @@ From: ubuntu:22.04
         scipy \
         jupyter \
         jupyterlab \
-        ipykernel
+        ipykernel \
+        subprocess \
+        pathlib
 
 %labels
     Author "LMUL Hardware Acceleration Project"

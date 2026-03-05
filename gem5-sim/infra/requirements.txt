@@ -1,6 +1,10 @@
+scons
 numpy
-pandas
 matplotlib
+pandas
+scipy
 jupyter
+jupyterlab
+ipykernel
 subprocess
 pathlib
