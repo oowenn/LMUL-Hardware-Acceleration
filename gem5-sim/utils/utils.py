@@ -195,7 +195,7 @@ def merge_header_triplet(table, row, col_start, label, fig, ax):
             ha="center", va="center", color="black", weight="bold", fontsize=10)
 
 
-def plot_table(sizes, core, save_fig=False):
+def plot_results_table(sizes, core, save_fig=False):
     metric_names = ["Simulation Time (s)", "Estimated Total Energy (J)", "Instructions (millions)"]
     metric_cols = ["Sim Time (s)", "Energy (µJ)", "Instructions"]
 
@@ -285,3 +285,4 @@ def plot_table(sizes, core, save_fig=False):
         fig.savefig(output_path, dpi=300, bbox_inches=bbox_inches, pad_inches=0)
         print(f"Saved {output_path}")
     plt.show()
+
