@@ -205,7 +205,12 @@ class LMulSystem(System):
             )
             # Connect accelerator to memory bus
             self.lmul_accel.pio = self.membus.mem_side_ports
-            self.lmul_accel.dma = self.membus.cpu_side_ports
+            if use_caches:
+                # With caches enabled, route DMA through the L2-side fabric so
+                # all masters enter memory through one coherent path.
+                self.lmul_accel.dma = self.l2bus.cpu_side_ports
+            else:
+                self.lmul_accel.dma = self.membus.cpu_side_ports
         
         # Memory controller
         self.mem_ctrl = MemCtrl()
