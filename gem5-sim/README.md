@@ -9,7 +9,7 @@ This directory provides:
 - Configs and benchmarks to run matrix multiply with the accelerator or on the CPU
 - Scripts to compare both runs and validate correctness
 
-**Typical workflow (local):** install the model into gem5 → build gem5 → build the benchmark → run the comparison script → inspect performance and (optionally) correctness.
+**Setup and workflow:** Use **workflow.ipynb** for the full flow (clone gem5, install model, build benchmark, run comparisons, validate, and plot). The notebook documents configurable parameters for each step.
 
 ## Directory Structure
 
@@ -18,9 +18,8 @@ gem5-sim/
 ├── README.md                 # This file
 ├── configs/                  # System config (lmul_system.py)
 ├── models/                   # gem5 accelerator model (C++ + Python + SConscript)
-├── benchmarks/               # Benchmarks (matrix_multiply, simple_test, helpers)
-│   ├── matrix_multiply/      # BF16 matrix-multiply benchmark (printf + no_printf)
-│   ├── simple_test/          # Tiny sanity-check benchmark used in scripts
+├── benchmarks/               # Benchmarks
+│   ├── matrix_multiply/      # BF16 matrix-multiply (matrix_multiply.c, matrix_multiply_no_printf.c, Makefile)
 │   └── read_accelerator_results.c
 ├── scripts/                  # Setup, run, and analysis scripts
 │   ├── install_model.sh      # Install accelerator into gem5 and build
@@ -43,7 +42,7 @@ gem5-sim/
 ├── infra/                    # Cluster/container helpers (e.g., Expanse, Singularity)
 │   ├── Singularity.def
 │   └── requirements.txt
-└── workflow.ipynb            # End-to-end LMUL vs IEEE workflow notebook
+└── workflow.ipynb            # End-to-end setup and LMUL vs IEEE workflow (start here)
 ```
 
 ---
@@ -57,146 +56,26 @@ gem5-sim/
 
 ---
 
-## Setup and Workflow (Local)
+## Setup and Workflow
 
-All commands assume you are in the repo root: `LMUL-Hardware-Acceleration/`.
+**Run the notebook** `workflow.ipynb` (from the repo root or with `gem5-sim/` as the working directory). It walks through:
 
-### 1. Check system and dependencies
+1. Cloning gem5 (if missing) and checking out `stable` + installing Python requirements  
+2. Optional system/dependency checks  
+3. Installing the LMUL model into gem5 and building gem5  
+4. Building the BF16 matrix-multiply benchmark  
+5. Running LMUL vs IEEE comparisons for configurable sizes and options  
+6. Validating outputs (when extraction is enabled)  
+7. Parsing and plotting performance comparison tables  
 
-```bash
-./gem5-sim/scripts/check_compatibility.sh
-./gem5-sim/scripts/check_gem5_dependencies.sh
-```
-
-Install any missing build deps, e.g.:
-
-```bash
-sudo apt-get install zlib1g-dev python3-dev protobuf-compiler pkg-config
-```
-
-### 2. Clone gem5 (if needed)
-
-gem5 must be at `LMUL-Hardware-Acceleration/gem5/`. If it is not there:
-
-```bash
-git clone https://github.com/gem5/gem5.git
-cd gem5 && git checkout stable && pip install -r requirements.txt && cd ..
-```
-
-`install_model.sh` will not clone gem5 for you; it expects `gem5/` to already exist.
-
-### 3. Install the LMUL model and build gem5
-
-This copies the accelerator into gem5 and builds gem5 (can take 30–60 minutes):
-
-```bash
-./gem5-sim/scripts/install_model.sh
-```
-
-Then verify:
-
-```bash
-./gem5-sim/scripts/test_accelerator.sh
-```
-
-You should see that the accelerator object file and Python bindings exist and that the accelerator can be instantiated.
-
-### 4. Build the benchmark
-
-The comparison workflow uses the **no-printf** benchmark to avoid syscall 403 in gem5 ARM SE. Build it (and optionally the printf version):
-
-```bash
-cd gem5-sim/benchmarks/matrix_multiply
-make matrix_multiply_no_printf.arm
-cd ../../..
-```
-
-If the ARM cross-compiler is missing, install it or build for x86: `make ARCH=x86 matrix_multiply_no_printf.x86` (only if you run gem5 for X86).
-
-### 5. Run a quick test (single simulation)
-
-```bash
-./gem5-sim/scripts/run_simulation.sh --test
-```
-
-This runs a 4×4 matrix multiply with the LMUL accelerator and writes output under `gem5-sim/m5out/`. Check:
-
-```bash
-ls -la gem5-sim/m5out/
-head -50 gem5-sim/m5out/stats.txt
-```
-
-### 6. Run the full comparison (LMUL Accel vs IEEE)
-
-By default this runs **two** simulations, then compares metrics and optionally checks correctness:
-
-1. **LMUL accelerator** — BF16 matmul on the hardware accelerator  
-2. **IEEE CPU** — native IEEE BF16 matmul on the CPU (no accelerator)  
-
-Add `--include-cpu-lmul` (or `RUN_CPU_LMUL=1`) for three-way (adds CPU LMUL: same numerics as accel but on CPU only).
-
-```bash
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh
-```
-
-Defaults: 4×4 matrices, 4×4 PE array. Outputs go to `gem5-sim/lmul_vs_ieee_comparison/`:
-
-- `lmul/stats.txt`, `ieee/stats.txt` — simulation stats (and `cpu_lmul/` when `--include-cpu-lmul`)  
-- `performance_comparison_4.txt` — two-way or three-way comparison  
-- With output extraction on (default): `result.bin` and `inputs.bin` per run for correctness checks  
-- Benchmark mode: argv[4] = 1 (accel), 2 (CPU LMUL), 0 (IEEE)
-
-View the report:
-
-```bash
-cat gem5-sim/lmul_vs_ieee_comparison/performance_comparison_4.txt
-```
-
-**Larger runs or performance-only (no correctness files):**
-
-```bash
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64 --pe-rows 4 --pe-cols 4
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64 --cpu-model o3
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 128 --no-output-extraction
-```
-
-- `--size N` — N×N matrices  
-- `--pe-rows N`, `--pe-cols N` — PE array dimensions  
-- `--cpu-model MODEL` — CPU model (`timing` or `o3`, default: `o3`)  
-- `--accel-clock FREQ` — accelerator clock frequency (default: `2GHz`)  
-- `--no-output-extraction` — skip writing `result.bin`/`inputs.bin` and correctness validation (faster, for performance-only)  
-- `--include-cpu-lmul` — also run CPU LMUL simulation for three-way comparison (default: off)
-
-CPU energy model knobs:
-- `--cpu-dyn-energy-per-cycle-pj` — dynamic energy per CPU cycle (used by `compare_metrics.py`)
-- `--cpu-dyn-energy-per-inst-pj` — dynamic energy per committed instruction (used by `compare_metrics.py`)
-- `--cpu-static-power-mw` — static CPU power term (used by `compare_metrics.py`)
-- `--disable-cpu-power-model` — optional: disable gem5 `system.cpu.power_model.*` stats in runs
-
-### 7. Re-run metrics or correctness locally
-
-```bash
-# Regenerate comparison table (two-way by default)
-python3 gem5-sim/scripts/compare_metrics.py \
-  gem5-sim/lmul_vs_ieee_comparison/lmul/stats.txt \
-  gem5-sim/lmul_vs_ieee_comparison/ieee/stats.txt \
-  --cpu-dyn-energy-per-cycle-pj 500 --cpu-dyn-energy-per-inst-pj 50 --cpu-static-power-mw 200
-
-# Three-way (add CPU LMUL stats if you ran with --include-cpu-lmul):
-# python3 gem5-sim/scripts/compare_metrics.py ... --cpu-lmul gem5-sim/lmul_vs_ieee_comparison/cpu_lmul/stats.txt
-
-# Correctness: compare simulation output to software reference (requires inputs.bin + result.bin)
-python3 gem5-sim/scripts/validate_result_against_reference.py gem5-sim/lmul_vs_ieee_comparison/lmul --mode lmul
-python3 gem5-sim/scripts/validate_result_against_reference.py gem5-sim/lmul_vs_ieee_comparison/ieee --mode ieee
-# When using --include-cpu-lmul: python3 gem5-sim/scripts/validate_result_against_reference.py .../cpu_lmul --mode lmul
-```
+Each section in the notebook describes the **configurable parameters** for that step (matrix sizes, PE array, CPU model, clocks, output extraction, etc.). For one-off commands and script options, see the notebook cells and the script `--help` (e.g. `./gem5-sim/scripts/compare_lmul_vs_ieee.sh --help`).
 
 ---
 
 ## Understanding Output
 
 - **stats.txt** (per run): `sim_seconds`, `system.cpu.numCycles`, `system.cpu.committedInsts`, CPI, IPC, DRAM energy, and accelerator stats (e.g. `system.lmul_accel.totalcycles`, `totalops`).
-- **performance_comparison_<size>.txt**: side-by-side LMUL vs IEEE and speedups (sim time, cycles, DRAM ratio, accelerator energy, modeled CPU energy, estimated total energy), plus cycle categorization.
+- **performance_comparison_\*.txt**: side-by-side LMUL vs IEEE and speedups (sim time, cycles, DRAM ratio, accelerator energy, modeled CPU energy, estimated total energy), plus cycle categorization.
 - Correctness is reported when you run the comparison with output extraction enabled: the script compares each run’s output to the reference (`rtl.numpy_lmul.lmul_numpy_matmul` for LMUL, IEEE matmul for CPU).
 
 CPU energy in the comparison report is a first-order model derived from cycle count, instruction count, and static power parameters. It does not require `system.cpu.power_model.dynamicPower` and avoids unit/path issues in gem5 power-model stats.
@@ -244,26 +123,11 @@ To calibrate parameters for a specific target, consult vendor datasheets or meas
 | **Syscall 403** | Use the no-printf benchmark: `make matrix_multiply_no_printf.arm` in `gem5-sim/benchmarks/matrix_multiply`. |
 | **Empty stats.txt** | Check `lmul_vs_ieee_comparison/lmul/simulation.log` (or `ieee/`) for errors; ensure the benchmark binary exists. |
 | **Permission denied** | `chmod +x gem5-sim/scripts/*.sh` |
-| **Git OpenSSL error** | `./gem5-sim/scripts/fix_git_permanently.sh` then restart shell or `source ~/.bashrc`. |
 
 ---
 
-## Quick reference (local)
+## Quick reference
 
-```bash
-# One-time setup
-./gem5-sim/scripts/check_compatibility.sh
-./gem5-sim/scripts/install_model.sh
-./gem5-sim/scripts/test_accelerator.sh
-cd gem5-sim/benchmarks/matrix_multiply && make matrix_multiply_no_printf.arm && cd ../../..
-
-# Single test run
-./gem5-sim/scripts/run_simulation.sh --test
-
-# Full comparison (default 4×4)
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh
-
-# Custom size, then view report
-./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64 --pe-rows 4 --pe-cols 4
-cat gem5-sim/lmul_vs_ieee_comparison/performance_comparison_64.txt
-```
+- **Full workflow:** Open and run `workflow.ipynb` (see notebook for all parameters).
+- **Single test run (after setup):** `./gem5-sim/scripts/run_simulation.sh --test`
+- **One comparison (from repo root):** `./gem5-sim/scripts/compare_lmul_vs_ieee.sh --size 64` then `cat gem5-sim/lmul_vs_ieee_comparison/performance_comparison_64.txt`

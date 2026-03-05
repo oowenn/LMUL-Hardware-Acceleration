@@ -196,8 +196,8 @@ def merge_header_triplet(table, row, col_start, label, fig, ax):
 
 
 def plot_table(sizes, core, save_fig=False):
-    metric_names = ["Simulation Time (s)", "Instructions (millions)", "Estimated Total Energy (J)"]
-    metric_cols = ["Sim Time (s)", "Instructions", "Energy (µJ)"]
+    metric_names = ["Simulation Time (s)", "Estimated Total Energy (J)", "Instructions (millions)"]
+    metric_cols = ["Sim Time (s)", "Energy (µJ)", "Instructions"]
 
     def fmt_val(m, val):
         if m == "Sim Time (s)":
