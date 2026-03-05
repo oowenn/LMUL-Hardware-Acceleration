@@ -25,6 +25,7 @@ BENCHMARK="matrix_multiply"
 USE_NO_PRINTF=1
 SHOW_OUTPUT=0
 TEST_MODE=0
+BENCHMARK_MODE=1
 
 # Usage function
 usage() {
@@ -153,6 +154,14 @@ if [ ! -f "$BENCHMARK_BIN" ]; then
     exit 1
 fi
 
+# Size-tagged artifact names preserve outputs across multiple matrix sizes.
+RESULT_FILE_NAME="result_${MATRIX_SIZE}.bin"
+INPUTS_FILE_NAME="inputs_${MATRIX_SIZE}.bin"
+RESULT_FILE_ARGS=()
+if [ "$BENCHMARK" = "matrix_multiply" ]; then
+    RESULT_FILE_ARGS=("$RESULT_FILE_NAME" "$INPUTS_FILE_NAME")
+fi
+
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
@@ -167,6 +176,10 @@ echo "  Mode: $([ $USE_IEEE -eq 1 ] && echo 'IEEE BF16' || echo 'LMUL')"
 echo "  Matrix Size: ${MATRIX_SIZE}x${MATRIX_SIZE}"
 echo "  Benchmark: $(basename "$BENCHMARK_BIN")"
 echo "  Output: ${OUTPUT_DIR}"
+if [ "$BENCHMARK" = "matrix_multiply" ]; then
+    echo "  Result file: ${RESULT_FILE_NAME}"
+    echo "  Inputs file: ${INPUTS_FILE_NAME}"
+fi
 echo "========================================"
 echo
 
@@ -183,12 +196,22 @@ CONFIG_ARGS=(
     --pe-cols="$PE_COLS"
     --cpu-model="$CPU_MODEL"
     --cmd="$BENCHMARK_BIN"
-    --cmd-args
-    "$MATRIX_SIZE"
-    "$MATRIX_SIZE"
-    "$MATRIX_SIZE"
-    "1"
 )
+
+if [ $USE_IEEE -eq 1 ]; then
+    BENCHMARK_MODE=0
+fi
+
+if [ "$BENCHMARK" = "matrix_multiply" ]; then
+    CONFIG_ARGS+=(
+        --cmd-args
+        "$MATRIX_SIZE"
+        "$MATRIX_SIZE"
+        "$MATRIX_SIZE"
+        "$BENCHMARK_MODE"
+        "${RESULT_FILE_ARGS[@]}"
+    )
+fi
 
 if [ $USE_IEEE -eq 1 ]; then
     CONFIG_ARGS+=(--use-ieee)
@@ -233,6 +256,15 @@ if [ $? -eq 0 ]; then
         grep -E "simSeconds|simTicks|numCycles" "$OUTPUT_DIR/stats.txt" || true
         grep "lmul_accel" "$OUTPUT_DIR/stats.txt" || true
         echo
+    fi
+
+    if [ "$BENCHMARK" = "matrix_multiply" ]; then
+        if [ -f "$OUTPUT_DIR/$RESULT_FILE_NAME" ]; then
+            echo "Result artifact: $OUTPUT_DIR/$RESULT_FILE_NAME"
+        fi
+        if [ -f "$OUTPUT_DIR/$INPUTS_FILE_NAME" ]; then
+            echo "Inputs artifact: $OUTPUT_DIR/$INPUTS_FILE_NAME"
+        fi
     fi
     
     echo "View full statistics: cat $OUTPUT_DIR/stats.txt"
