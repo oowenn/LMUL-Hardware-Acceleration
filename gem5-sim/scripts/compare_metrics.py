@@ -249,7 +249,7 @@ def format_comparison(lmul_metrics, ieee_metrics, speedup):
     lines.append("")
     lines.append("Final Metrics")
     lines.append("-"*70)
-    lines.append(f"{'Metric':<30s} {'LMUL':<20s} {'IEEE':<20s}")
+    lines.append(f"{'Metric':<30s} {'LMUL Accel':<20s} {'IEEE':<20s}")
     lines.append(f"{'Simulation Time (s)':<30s} {lmul_metrics['sim_seconds']:<20.6f} {ieee_metrics['sim_seconds']:<20.6f}")
     if 'time' in speedup:
         lines.append(f"  → Speedup: {speedup['time']:.2f}x")
@@ -263,7 +263,7 @@ def format_comparison(lmul_metrics, ieee_metrics, speedup):
 
     lines.append("Performance Details")
     lines.append("-"*70)
-    lines.append(f"{'Metric':<30s} {'LMUL':<20s} {'IEEE':<20s}")
+    lines.append(f"{'Metric':<30s} {'LMUL Accel':<20s} {'IEEE':<20s}")
     lines.append(f"{'Instructions':<30s} {lmul_metrics['instructions']:<20,} {ieee_metrics['instructions']:<20,}")
     lines.append(f"{'CPI':<30s} {lmul_metrics['cpi']:<20.4f} {ieee_metrics['cpi']:<20.4f}")
     if 'cpi' in speedup:
@@ -275,7 +275,7 @@ def format_comparison(lmul_metrics, ieee_metrics, speedup):
 
     lines.append("Cycle Categorization")
     lines.append("-"*70)
-    lines.append(f"{'Metric':<30s} {'LMUL':<20s} {'IEEE':<20s}")
+    lines.append(f"{'Metric':<30s} {'LMUL Accel':<20s} {'IEEE':<20s}")
     lines.append(f"{'CPU total cycles':<30s} {lmul_metrics.get('cpu_cycles', 0):<20,} {ieee_metrics.get('cpu_cycles', 0):<20,}")
 
     lmul_accel_total = lmul_metrics.get('accel_total_cycles', 0)
@@ -317,7 +317,7 @@ def format_comparison(lmul_metrics, ieee_metrics, speedup):
 
     lines.append("Energy Breakdown")
     lines.append("-"*70)
-    lines.append(f"{'Metric':<30s} {'LMUL':<20s} {'IEEE':<20s}")
+    lines.append(f"{'Metric':<30s} {'LMUL Accel':<20s} {'IEEE':<20s}")
     # DRAM energy comes directly from gem5 DRAM stats.
     lines.append(f"{'DRAM energy (µJ)':<30s} {lmul_metrics.get('dram_energy_uJ', 0):<20.3f} {ieee_metrics.get('dram_energy_uJ', 0):<20.3f}")
     if 'dram_energy' in speedup:
