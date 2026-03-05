@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 
 // LMUL Accelerator Register Offsets
 #define LMUL_BASE_ADDR   0x40000000  // MMIO at 1GB (common MMIO region)
@@ -59,6 +62,37 @@ float bf16_to_float(bf16_t bf16);
 static int write_result_bin(const char *path, uint32_t M, uint32_t P, const bf16_t *C);
 static int write_inputs_bin(const char *path, uint32_t M, uint32_t N, uint32_t P,
                            const bf16_t *A, const bf16_t *B);
+static inline float dot_product_f32(const float *a_row, const float *b_row,
+                                    uint32_t k_start, uint32_t k_end, float sum);
+
+static inline float dot_product_f32(const float *a_row, const float *b_row,
+                                    uint32_t k_start, uint32_t k_end, float sum)
+{
+#if defined(__ARM_NEON) || defined(__aarch64__)
+    uint32_t k = k_start;
+    float32x4_t acc = vdupq_n_f32(0.0f);
+    for (; k + 3 < k_end; k += 4) {
+        float32x4_t a_vec = vld1q_f32(a_row + k);
+        float32x4_t b_vec = vld1q_f32(b_row + k);
+        acc = vmlaq_f32(acc, a_vec, b_vec);
+    }
+#if defined(__aarch64__)
+    sum += vaddvq_f32(acc);
+#else
+    float32x2_t pair = vadd_f32(vget_low_f32(acc), vget_high_f32(acc));
+    pair = vpadd_f32(pair, pair);
+    sum += vget_lane_f32(pair, 0);
+#endif
+    for (; k < k_end; k++) {
+        sum += a_row[k] * b_row[k];
+    }
+#else
+    for (uint32_t k = k_start; k < k_end; k++) {
+        sum += a_row[k] * b_row[k];
+    }
+#endif
+    return sum;
+}
 
 static int write_result_bin(const char *path, uint32_t M, uint32_t P, const bf16_t *C)
 {
@@ -297,9 +331,7 @@ void cpu_matrix_multiply(bf16_t *A, bf16_t *B, bf16_t *C,
                     for (uint32_t j = jj; j < j_end; j++) {
                         const float *b_row = &B_t[(size_t)j * N];
                         float sum = c_row[j];
-                        for (uint32_t k = kk; k < k_end; k++) {
-                            sum += a_row[k] * b_row[k];
-                        }
+                        sum = dot_product_f32(a_row, b_row, kk, k_end, sum);
                         c_row[j] = sum;
                     }
                 }

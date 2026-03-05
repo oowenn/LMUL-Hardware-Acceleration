@@ -5,8 +5,10 @@
 # Auto-detect available ARM compiler
 CC_ARM = $(shell which arm-linux-gnueabihf-gcc 2>/dev/null || which arm-linux-gnueabi-gcc 2>/dev/null || echo "arm-linux-gnueabihf-gcc")
 # Use compiler's default float ABI (hard-float for gnueabihf, soft-float for gnueabi)
-# Remove -march if it causes issues, gem5 ARM supports both
-CFLAGS_ARM = -static -O2
+# Keep IEEE behavior fair/comparable (no -ffast-math), but allow stronger optimization.
+CFLAGS_COMMON = -static -O3
+# ARMv7 + NEON enables auto-vectorization for the IEEE float kernel.
+CFLAGS_ARM = $(CFLAGS_COMMON) -march=armv7-a -mfpu=neon
 
 # Check if compiler exists
 ARM_CC_AVAILABLE = $(shell which $(CC_ARM) 2>/dev/null)
@@ -27,7 +29,7 @@ endif
 
 # For X86 (if using gem5 X86 build)
 CC_X86 = gcc
-CFLAGS_X86 = -static -O2
+CFLAGS_X86 = $(CFLAGS_COMMON)
 
 # Default target
 TARGET = matrix_multiply
