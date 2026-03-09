@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L-Mul · Hardware-Accelerated Neural Networks</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --bg-darker: #050505;
+            --surface: #0f0f0f;
+            --surface-2: #141414;
+            --surface-3: #1a1a1a;
+            --border: #1f1f1f;
+            --border-light: #2a2a2a;
+            --text: #ffffff;
+            --text-dim: #c0e8d0;
+            --text-muted: #80c8a0;
+            --primary: #00ff88;
+            --primary-dim: #00cc6a;
+            --primary-glow: rgba(0, 255, 136, 0.4);
+            --secondary: #00d4ff;
+            --accent: #39ff14;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; overflow-x: hidden; font-size: 18px; }
+        ::selection { background: var(--primary); color: var(--bg); }
+        a { color: var(--primary); text-decoration: none; transition: all 0.2s; }
+        a:hover { color: var(--accent); text-shadow: 0 0 10px var(--primary-glow); }
+
+        .scanlines { position: fixed; inset: 0; z-index: 9999; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px); }
+        .grid-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 255, 136, 0.08), transparent 50%), linear-gradient(rgba(0, 255, 136, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 136, 0.02) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; }
+        #particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+
+        nav { position: fixed; top: 0; width: 100%; padding: 1.25rem 2rem; background: rgba(10, 10, 10, 0.9); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); z-index: 1000; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: var(--primary); text-shadow: 0 0 20px var(--primary-glow); }
+        .logo span { color: var(--text-dim); }
+        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        @media (max-width: 900px) { .nav-links { display: none; } }
+        .nav-links a { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; }
+        .nav-links a:hover { color: var(--primary); }
+        .nav-cta { padding: 0.6rem 1.25rem; background: transparent; border: 1px solid var(--primary); border-radius: 4px; color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; }
+        .nav-cta:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 20px var(--primary-glow); }
+        .nav-cta svg { width: 18px; height: 18px; }
+
+        .hero { position: relative; min-height: 100vh; display: flex; align-items: center; padding: 8rem 2rem 4rem; z-index: 10; max-width: 1400px; margin: 0 auto; }
+        .hero-content { max-width: 900px; }
+        .hero-tag { display: inline-block; padding: 0.5rem 1rem; background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--primary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1.5rem; animation: fadeIn 0.8s ease; }
+        .hero-tag::before { content: '> '; opacity: 0.5; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .hero h1 { font-family: 'Space Grotesk', sans-serif; font-size: clamp(3rem, 7vw, 5.5rem); font-weight: 700; line-height: 1.1; margin-bottom: 1.5rem; animation: fadeIn 0.8s ease 0.1s both; }
+        .hero h1 .highlight { color: var(--primary); text-shadow: 0 0 40px var(--primary-glow); }
+        .hero-desc { font-size: 1.4rem; color: var(--text-dim); max-width: 650px; margin-bottom: 2.5rem; animation: fadeIn 0.8s ease 0.2s both; line-height: 1.8; }
+        .hero-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-top: 3rem; animation: fadeIn 0.8s ease 0.4s both; }
+        @media (max-width: 800px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } }
+        .stat-box { background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; position: relative; overflow: hidden; }
+        .stat-box::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--primary); opacity: 0; transition: opacity 0.3s; }
+        .stat-box:hover::before { opacity: 1; }
+        .stat-box:hover { border-color: var(--primary); }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 2.75rem; font-weight: 700; color: var(--primary); text-shadow: 0 0 20px var(--primary-glow); }
+        .stat-label { font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 0.35rem; }
+
+        section { position: relative; padding: 6rem 2rem; z-index: 10; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .section-label { font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; color: var(--primary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .section-label::before { content: '//'; opacity: 0.5; }
+        .section-title { font-family: 'Space Grotesk', sans-serif; font-size: clamp(2.25rem, 5vw, 3.25rem); font-weight: 700; margin-bottom: 1.25rem; }
+        .section-desc { font-size: 1.25rem; color: var(--text-dim); max-width: 700px; line-height: 1.8; }
+        .section-header { margin-bottom: 3.5rem; }
+        .section-header.center { text-align: center; }
+        .section-header.center .section-desc { margin: 0 auto; }
+
+        #why { background: var(--bg-darker); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .why-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 3.5rem; align-items: center; }
+        @media (max-width: 900px) { .why-grid { grid-template-columns: 1fr; } }
+        .why-content p { font-size: 1.2rem; color: var(--text-dim); line-height: 1.9; margin-bottom: 1.25rem; }
+        .why-content strong { color: var(--primary); }
+        .why-stats { display: flex; flex-direction: column; gap: 1.25rem; }
+        .why-stat { background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; display: flex; align-items: center; gap: 1.25rem; }
+        .why-stat-icon { width: 56px; height: 56px; background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+        .why-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: var(--primary); }
+        .why-stat-label { font-size: 1rem; color: var(--text-muted); }
+
+        #results { background: var(--surface); }
+        .results-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.75rem; }
+        @media (max-width: 1000px) { .results-grid { grid-template-columns: 1fr; } }
+        .result-card { background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; transition: all 0.3s; }
+        .result-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .result-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .result-header h3 { font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem; }
+        .result-header h3::before { content: ''; width: 10px; height: 10px; background: var(--primary); }
+        .result-badge { padding: 0.35rem 0.65rem; background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--primary); }
+        .result-body { padding: 1.5rem; }
+        .chart-container { height: 300px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.85rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; background: var(--surface-3); }
+        td { font-size: 1rem; color: var(--text); }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .hl { color: var(--primary); font-weight: 600; }
+        .diff { color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; }
+
+        .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-top: 2.5rem; }
+        @media (max-width: 800px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
+        .metric-box { background: var(--surface-2); border: 1px solid var(--border); padding: 2rem; text-align: center; transition: all 0.3s; }
+        .metric-box:hover { border-color: var(--primary); }
+        .metric-box.featured { border-color: var(--primary); box-shadow: 0 0 30px rgba(0, 255, 136, 0.1); }
+        .metric-value { font-family: 'JetBrains Mono', monospace; font-size: 2.5rem; font-weight: 700; color: var(--primary); text-shadow: 0 0 20px var(--primary-glow); }
+        .metric-label { font-size: 0.95rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 0.5rem; }
+
+        .data-table-wrap { background: var(--surface); border: 1px solid var(--border); overflow: hidden; margin-top: 2.5rem; }
+        .data-table-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .data-table-header h3 { font-size: 1.2rem; display: flex; align-items: center; gap: 0.6rem; }
+        .data-table-header h3::before { content: ''; width: 10px; height: 10px; background: var(--primary); }
+        .data-table-body { overflow-x: auto; padding: 1.25rem; }
+        .data-table { width: 100%; min-width: 900px; }
+        .data-table td, .data-table th { font-size: 0.95rem; }
+
+        #hardware { background: var(--bg); }
+        .hw-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 2.5rem; }
+        @media (max-width: 1000px) { .hw-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px) { .hw-grid { grid-template-columns: 1fr; } }
+        .hw-card { background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; transition: all 0.3s; position: relative; }
+        .hw-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--primary); transform: scaleX(0); transform-origin: left; transition: transform 0.3s; }
+        .hw-card:hover { border-color: var(--border-light); }
+        .hw-card:hover::before { transform: scaleX(1); }
+        .hw-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
+        .hw-card h3 { font-size: 1.1rem; }
+        .status { padding: 0.2rem 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; text-transform: uppercase; }
+        .status.done { background: rgba(0, 255, 136, 0.15); color: var(--primary); }
+        .hw-card p { font-size: 1rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 1rem; }
+        .hw-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .hw-tag { padding: 0.25rem 0.5rem; background: var(--surface-2); font-size: 0.8rem; color: var(--text-muted); }
+
+        #algorithm { background: var(--surface); border-top: 1px solid var(--border); }
+        .algo-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 2.5rem; align-items: start; }
+        @media (max-width: 1000px) { .algo-grid { grid-template-columns: 1fr; } }
+        .algo-steps { display: flex; flex-direction: column; gap: 1rem; }
+        .algo-step { display: flex; gap: 1.25rem; padding: 1.25rem; background: var(--surface-2); border: 1px solid var(--border); transition: all 0.3s; }
+        .algo-step:hover { border-color: var(--primary); transform: translateX(4px); }
+        .step-num { width: 36px; height: 36px; background: var(--primary); color: var(--bg); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .step-content h4 { font-size: 1.1rem; margin-bottom: 0.35rem; }
+        .step-content p { font-size: 1rem; color: var(--text-dim); }
+        .code-block { background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+        .code-header { padding: 0.75rem 1.25rem; background: var(--surface-3); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .code-dots { display: flex; gap: 0.4rem; }
+        .code-dots span { width: 12px; height: 12px; border-radius: 50%; }
+        .code-dots span:nth-child(1) { background: #ff5f57; }
+        .code-dots span:nth-child(2) { background: #ffbd2e; }
+        .code-dots span:nth-child(3) { background: #28ca41; }
+        .code-file { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--text-muted); }
+        .code-body { padding: 1.25rem; overflow-x: auto; }
+        .code-body pre { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.8; color: var(--text-dim); }
+        .code-body .kw { color: var(--primary); }
+        .code-body .fn { color: var(--secondary); }
+        .code-body .num { color: #fbbf24; }
+        .code-body .cm { color: var(--text-muted); font-style: italic; }
+
+        #ablation { background: var(--bg); }
+        .ablation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.75rem; }
+        @media (max-width: 900px) { .ablation-grid { grid-template-columns: 1fr; } }
+        .ablation-card { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+        .ablation-card:hover { border-color: var(--border-light); }
+        .ablation-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .ablation-header h3 { font-size: 1.15rem; }
+        .ablation-badge { padding: 0.3rem 0.6rem; background: var(--primary); color: var(--bg); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 600; }
+        .ablation-body { padding: 1.25rem 1.5rem; }
+        .ablation-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--surface-2); margin-bottom: 0.5rem; transition: all 0.2s; }
+        .ablation-row:hover { transform: translateX(4px); }
+        .ablation-row .config { font-size: 1rem; color: var(--text-dim); }
+        .ablation-row .value { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; color: var(--primary); }
+        .ablation-row.baseline .value { color: var(--text); }
+        .ablation-row.best { border-left: 4px solid var(--primary); background: rgba(0, 255, 136, 0.08); }
+        .ablation-insight { margin-top: 1rem; padding: 1rem 1.25rem; background: var(--bg); border-left: 3px solid var(--primary); font-size: 1.05rem; color: var(--text-dim); line-height: 1.7; }
+        .ablation-insight strong { color: var(--primary); }
+
+        #team { background: var(--surface); border-top: 1px solid var(--border); }
+        .team-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1.25rem; }
+        @media (max-width: 1000px) { .team-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 600px) { .team-grid { grid-template-columns: repeat(2, 1fr); } }
+        .team-card { background: var(--surface-2); border: 1px solid var(--border); padding: 1.5rem; text-align: center; transition: all 0.3s; }
+        .team-card:hover { border-color: var(--primary); }
+        .team-avatar { width: 56px; height: 56px; margin: 0 auto 1rem; background: var(--primary); color: var(--bg); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; }
+        .team-card h4 { font-size: 1.05rem; margin-bottom: 0.25rem; }
+        .team-card .role { font-size: 0.95rem; color: var(--text-muted); }
+        .advisor { text-align: center; margin-top: 2.5rem; padding: 1.5rem; background: var(--surface-2); border: 1px solid var(--border); }
+        .advisor p { color: var(--text-dim); font-size: 1.1rem; }
+        .advisor strong { color: var(--primary); }
+
+        footer { padding: 2.5rem; background: var(--bg-darker); border-top: 1px solid var(--border); z-index: 10; position: relative; }
+        .footer-inner { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+        .footer-links { display: flex; gap: 2rem; }
+        .footer-links a { color: var(--text-muted); font-size: 1rem; }
+        .footer-links a:hover { color: var(--primary); }
+        .footer-copy { font-size: 0.95rem; color: var(--text-muted); }
+
+        .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
+        .stagger-1 { transition-delay: 0.1s; }
+        .stagger-2 { transition-delay: 0.2s; }
+        .stagger-3 { transition-delay: 0.3s; }
+        .stagger-4 { transition-delay: 0.4s; }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div class="grid-bg"></div>
+    <canvas id="particles"></canvas>
+
+    <nav>
+        <div class="logo">L<span>-</span>Mul</div>
+        <ul class="nav-links">
+            <li><a href="#why">Why</a></li>
+            <li><a href="#results">Results</a></li>
+            <li><a href="#hardware">Hardware</a></li>
+            <li><a href="#algorithm">Algorithm</a></li>
+            <li><a href="#ablation">Ablation</a></li>
+            <li><a href="#team">Team</a></li>
+        </ul>
+        <a href="https://github.com/oowenn/LMUL-Hardware-Acceleration" class="nav-cta" target="_blank">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            GitHub
+        </a>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-tag">DSC 180B Capstone · UC San Diego · Winter 2026</div>
+            <h1>Neural networks,<br><span class="highlight">73× faster.</span></h1>
+            <p class="hero-desc">L-Mul replaces expensive floating-point multiplication with simple addition. Same accuracy. 67% less silicon. 81× less energy. Hardware-verified.</p>
+            <div class="hero-stats">
+                <div class="stat-box"><div class="stat-value" data-count="73">0</div><div class="stat-label">× Speedup</div></div>
+                <div class="stat-box"><div class="stat-value" data-count="81">0</div><div class="stat-label">× Less Energy</div></div>
+                <div class="stat-box"><div class="stat-value" data-count="67">0</div><div class="stat-label">% Area Reduction</div></div>
+                <div class="stat-box"><div class="stat-value">&lt;1%</div><div class="stat-label">Accuracy Loss</div></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="why">
+        <div class="container">
+            <div class="why-grid">
+                <div class="why-content fade-in">
+                    <div class="section-label">The Problem</div>
+                    <h2 class="section-title">Why This Matters</h2>
+                    <p>LLMs like ChatGPT, Gemini, and Claude are everywhere—but they're computationally expensive. A single query uses <strong>0.3–3 Wh</strong> of energy. As of July 2025, ChatGPT alone processes <strong>2.5 billion prompts per day</strong>.</p>
+                    <p>At the heart of these models is matrix multiplication—accounting for <strong>65–85% of all compute</strong>. Traditional floating-point multipliers are power-hungry and silicon-intensive.</p>
+                    <p><strong>L-Mul</strong> offers an alternative: approximate multiplication using addition in log-space. Neural networks don't need exact arithmetic—they need fast, efficient inference. L-Mul delivers both.</p>
+                </div>
+                <div class="why-stats fade-in stagger-2">
+                    <div class="why-stat"><div class="why-stat-icon">⚡</div><div><div class="why-stat-value">2.5B</div><div class="why-stat-label">ChatGPT prompts/day</div></div></div>
+                    <div class="why-stat"><div class="why-stat-icon">🔋</div><div><div class="why-stat-value">0.3-3 Wh</div><div class="why-stat-label">Energy per LLM query</div></div></div>
+                    <div class="why-stat"><div class="why-stat-icon">📊</div><div><div class="why-stat-value">65-85%</div><div class="why-stat-label">Ops are matmul</div></div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="results">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label">Benchmarks</div>
+                <h2 class="section-title">Results</h2>
+                <p class="section-desc">Tested across MLP, CNN, LSTM, and Transformer architectures with hardware validation.</p>
+            </div>
+
+            <div class="results-grid fade-in">
+                <div class="result-card">
+                    <div class="result-header"><h3>Classification Accuracy</h3><span class="result-badge">FP32 vs L-Mul</span></div>
+                    <div class="result-body">
+                        <table>
+                            <thead><tr><th>Model</th><th>Dataset</th><th>FP32</th><th>L-Mul</th><th>Δ</th></tr></thead>
+                            <tbody>
+                                <tr><td>MLP</td><td>MNIST</td><td class="mono">97.02%</td><td class="mono">97.01%</td><td class="diff">−0.01%</td></tr>
+                                <tr><td>CNN</td><td>MNIST</td><td class="mono">98.30%</td><td class="mono">98.07%</td><td class="diff">−0.23%</td></tr>
+                                <tr><td>LSTM</td><td>FashionMNIST</td><td class="mono">83.4%</td><td class="mono">82.8%</td><td class="diff">−0.6%</td></tr>
+                                <tr><td>LSTM</td><td>KMNIST</td><td class="mono">84.8%</td><td class="mono">84.2%</td><td class="diff">−0.6%</td></tr>
+                                <tr><td>LSTM</td><td>SeqMNIST</td><td class="mono">95.2%</td><td class="mono">94.6%</td><td class="diff">−0.6%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="result-card">
+                    <div class="result-header"><h3>Accuracy Comparison</h3></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="accuracyChart"></canvas></div></div>
+                </div>
+            </div>
+
+            <div class="results-grid fade-in" style="margin-top:1.75rem">
+                <div class="result-card">
+                    <div class="result-header"><h3>NanoGPT Perplexity</h3><span class="result-badge">Shakespeare</span></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="transformerChart"></canvas></div></div>
+                </div>
+                <div class="result-card">
+                    <div class="result-header"><h3>FPGA Hardware Simulation</h3><span class="result-badge">Vivado RTL</span></div>
+                    <div class="result-body">
+                        <table>
+                            <thead><tr><th>Implementation</th><th>Correct</th><th>Accuracy</th></tr></thead>
+                            <tbody>
+                                <tr><td>Standard BF16 Mult</td><td class="mono">165/1000</td><td class="mono">16.5%</td></tr>
+                                <tr><td class="hl">L-Mul Approximate</td><td class="mono hl">177/1000</td><td class="mono hl">17.7%</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="font-size:1rem;color:var(--text-dim);margin-top:1.25rem;padding:1rem;background:var(--surface-3);line-height:1.6">Note: Low absolute accuracy due to BF16 quantization of FP32-trained weights. L-Mul still outperforms standard BF16.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-table-wrap fade-in">
+                <div class="data-table-header"><h3>gem5 System Simulation</h3><span class="result-badge">ARM CPU + LMUL Accelerator</span></div>
+                <div class="data-table-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Size</th><th colspan="3">Simulation Time (s)</th><th colspan="3">Estimated Energy (J)</th><th colspan="3">Instructions (M)</th></tr>
+                            <tr><th></th><th>LMUL Accel</th><th>IEEE CPU</th><th>LMUL CPU</th><th>LMUL Accel</th><th>IEEE CPU</th><th>LMUL CPU</th><th>LMUL Accel</th><th>IEEE CPU</th><th>LMUL CPU</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="mono">n=4</td><td class="hl">1.20× faster</td><td>0.000089</td><td>1.01× slower</td><td class="hl">1.21× less</td><td>0.000296</td><td>1.01× more</td><td class="hl">1.23× less</td><td>0.010</td><td>1.09× more</td></tr>
+                            <tr><td class="mono">n=64</td><td class="hl">8.86× faster</td><td>0.007192</td><td>3.69× slower</td><td class="hl">9.52× less</td><td>0.023336</td><td>3.68× more</td><td class="hl">6.09× less</td><td>0.877</td><td>9.87× more</td></tr>
+                            <tr><td class="mono">n=256</td><td class="hl">37.36× faster</td><td>0.446429</td><td>3.82× slower</td><td class="hl">41.29× less</td><td>1.473231</td><td>3.76× more</td><td class="hl">21.11× less</td><td>47.468</td><td>11.51× more</td></tr>
+                            <tr><td class="mono">n=512</td><td class="hl" style="font-size:1.1rem">73.04× faster</td><td>3.512644</td><td>—</td><td class="hl" style="font-size:1.1rem">80.97× less</td><td>11.613140</td><td>—</td><td class="hl" style="font-size:1.1rem">39.73× less</td><td>369.393</td><td>—</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="results-grid fade-in" style="margin-top:1.75rem">
+                <div class="result-card">
+                    <div class="result-header"><h3>Speedup Scaling</h3><span class="result-badge">LMUL Accel vs IEEE</span></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="speedupChart"></canvas></div></div>
+                </div>
+                <div class="result-card">
+                    <div class="result-header"><h3>Energy Reduction</h3><span class="result-badge">LMUL Accel vs IEEE</span></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="energyChart"></canvas></div></div>
+                </div>
+            </div>
+
+            <div class="metrics-row fade-in">
+                <div class="metric-box featured"><div class="metric-value">66.8%</div><div class="metric-label">Area Reduction</div></div>
+                <div class="metric-box"><div class="metric-value">63%</div><div class="metric-label">Fewer Cells</div></div>
+                <div class="metric-box"><div class="metric-value">40%</div><div class="metric-label">Less DSP Usage</div></div>
+                <div class="metric-box"><div class="metric-value">500MHz</div><div class="metric-label">Timing Verified</div></div>
+            </div>
+
+            <div class="results-grid fade-in" style="margin-top:1.75rem">
+                <div class="result-card">
+                    <div class="result-header"><h3>Synthesis Area Comparison</h3><span class="result-badge">Nangate 45nm</span></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="areaChart"></canvas></div></div>
+                </div>
+                <div class="result-card">
+                    <div class="result-header"><h3>HLS Resource Usage</h3><span class="result-badge">Vitis HLS</span></div>
+                    <div class="result-body"><div class="chart-container"><canvas id="dspChart"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="hardware">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label">Implementation</div>
+                <h2 class="section-title">Hardware Validation</h2>
+                <p class="section-desc">Multiple verification paths: ASIC synthesis, FPGA simulation, HLS, and full system simulation.</p>
+            </div>
+            <div class="hw-grid">
+                <div class="hw-card fade-in stagger-1"><div class="hw-card-header"><h3>Yosys Synthesis</h3><span class="status done">Done</span></div><p>BF16 L-Mul synthesized with Nangate 45nm standard cells. 66.8% area reduction, 63% fewer cells. 500MHz timing verified.</p><div class="hw-tags"><span class="hw-tag">Yosys</span><span class="hw-tag">OpenSTA</span><span class="hw-tag">45nm</span></div></div>
+                <div class="hw-card fade-in stagger-2"><div class="hw-card-header"><h3>gem5 System Sim</h3><span class="status done">Done</span></div><p>Full CPU + accelerator simulation with DMA data path. Up to 73× speedup and 81× energy reduction at n=512.</p><div class="hw-tags"><span class="hw-tag">gem5</span><span class="hw-tag">ARM</span><span class="hw-tag">DMA</span></div></div>
+                <div class="hw-card fade-in stagger-3"><div class="hw-card-header"><h3>Verilog MLP</h3><span class="status done">Done</span></div><p>Full MNIST classifier in RTL: nn.Linear(784→128) → ReLU → nn.Linear(128→10). BF16 datapath with FP32 accumulation.</p><div class="hw-tags"><span class="hw-tag">Vivado</span><span class="hw-tag">Verilog</span><span class="hw-tag">MNIST</span></div></div>
+                <div class="hw-card fade-in stagger-1"><div class="hw-card-header"><h3>Vitis HLS</h3><span class="status done">Done</span></div><p>Tiled matrix multiplication for Qwen2.5 0.5B linear layer. On-chip memory reuse, parallel MACs. 40% DSP reduction.</p><div class="hw-tags"><span class="hw-tag">Vitis HLS</span><span class="hw-tag">Qwen</span><span class="hw-tag">Tiling</span></div></div>
+                <div class="hw-card fade-in stagger-2"><div class="hw-card-header"><h3>Power Analysis</h3><span class="status done">Done</span></div><p>VCD-based power estimation. 2.90× better energy efficiency (pJ/MAC). System-level speedup 1.77–2.31×.</p><div class="hw-tags"><span class="hw-tag">VCD</span><span class="hw-tag">OpenSTA</span><span class="hw-tag">Power</span></div></div>
+                <div class="hw-card fade-in stagger-3"><div class="hw-card-header"><h3>PyTorch Reference</h3><span class="status done">Done</span></div><p>Software implementation for accuracy validation. Vectorized BF16 ops with bias correction.</p><div class="hw-tags"><span class="hw-tag">PyTorch</span><span class="hw-tag">NumPy</span><span class="hw-tag">Python</span></div></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="algorithm">
+        <div class="container">
+            <div class="section-header fade-in"><div class="section-label">How It Works</div><h2 class="section-title">The L-Mul Algorithm</h2><p class="section-desc">Replace O(n²) mantissa multiplication with O(n) addition in log-space.</p></div>
+            <div class="algo-grid">
+                <div class="fade-in">
+                    <div class="algo-steps">
+                        <div class="algo-step"><div class="step-num">1</div><div class="step-content"><h4>Extract BF16 Fields</h4><p>Split 16-bit input into sign (1), exponent (8), mantissa (7 bits).</p></div></div>
+                        <div class="algo-step"><div class="step-num">2</div><div class="step-content"><h4>Add Instead of Multiply</h4><p>Treat exponent+mantissa as a single 15-bit field. Add with bias correction.</p></div></div>
+                        <div class="algo-step"><div class="step-num">3</div><div class="step-content"><h4>Handle Overflow</h4><p>Check carry bits for overflow/underflow. Saturate to max/min values.</p></div></div>
+                        <div class="algo-step"><div class="step-num">4</div><div class="step-content"><h4>Apply Correction</h4><p>Add correction factor (result/32 + result/64) for accuracy.</p></div></div>
+                    </div>
+                </div>
+                <div class="code-block fade-in stagger-2">
+                    <div class="code-header"><div class="code-dots"><span></span><span></span><span></span></div><span class="code-file">lmul_bf16.py</span></div>
+                    <div class="code-body">
+<pre><span class="kw">def</span> <span class="fn">lmul_bf16</span>(a, b):
+    <span class="cm"># Extract BF16 from upper 16 bits</span>
+    a_bf16 = (a.view(torch.int32) >> <span class="num">16</span>) & <span class="num">0xFFFF</span>
+    b_bf16 = (b.view(torch.int32) >> <span class="num">16</span>) & <span class="num">0xFFFF</span>
+    
+    <span class="cm"># Extract sign and field</span>
+    a_sign = (a_bf16 >> <span class="num">15</span>) & <span class="num">0x1</span>
+    b_sign = (b_bf16 >> <span class="num">15</span>) & <span class="num">0x1</span>
+    a_field = a_bf16 & <span class="num">0x7FFF</span>
+    b_field = b_bf16 & <span class="num">0x7FFF</span>
+    
+    <span class="cm"># L-Mul: add with bias</span>
+    sum_full = a_field + b_field + <span class="num">0x4080</span>
+    carry = (sum_full >> <span class="num">15</span>) & <span class="num">0x3</span>
+    
+    <span class="cm"># Handle overflow</span>
+    result_field = torch.where(carry == <span class="num">1</span>, 
+                               sum_full & <span class="num">0x7FFF</span>, <span class="num">0</span>)
+    result_field = torch.where(carry >= <span class="num">2</span>, 
+                               <span class="num">0x7FFF</span>, result_field)
+    
+    <span class="cm"># Pack and correct</span>
+    s = a_sign ^ b_sign
+    result = ((s << <span class="num">15</span>) | result_field) << <span class="num">16</span>
+    result = result.view(torch.float32)
+    <span class="kw">return</span> result + result/<span class="num">32</span> + result/<span class="num">64</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="ablation">
+        <div class="container">
+            <div class="section-header fade-in"><div class="section-label">Analysis</div><h2 class="section-title">Ablation Studies</h2><p class="section-desc">Which layers are most sensitive to L-Mul approximation?</p></div>
+            <div class="ablation-grid">
+                <div class="ablation-card fade-in">
+                    <div class="ablation-header"><h3>LSTM: Gates vs States</h3><span class="ablation-badge">Perplexity</span></div>
+                    <div class="ablation-body">
+                        <div class="ablation-row baseline"><span class="config">FP32 Baseline</span><span class="value">1.58</span></div>
+                        <div class="ablation-row"><span class="config">L-Mul Gates Only</span><span class="value">1.58</span></div>
+                        <div class="ablation-row"><span class="config">L-Mul States Only</span><span class="value">1.55</span></div>
+                        <div class="ablation-row best"><span class="config">L-Mul Both</span><span class="value">1.54 ✓</span></div>
+                        <div class="ablation-insight"><strong>Finding:</strong> State updates benefit from L-Mul—possible regularization effect.</div>
+                    </div>
+                </div>
+                <div class="ablation-card fade-in stagger-1">
+                    <div class="ablation-header"><h3>CNN: Conv vs FC</h3><span class="ablation-badge">Accuracy</span></div>
+                    <div class="ablation-body">
+                        <div class="ablation-row baseline"><span class="config">FP32 Baseline</span><span class="value">98.30%</span></div>
+                        <div class="ablation-row"><span class="config">L-Mul Conv Only</span><span class="value">98.00%</span></div>
+                        <div class="ablation-row best"><span class="config">L-Mul FC Only</span><span class="value">98.20% ✓</span></div>
+                        <div class="ablation-row"><span class="config">L-Mul Both</span><span class="value">98.07%</span></div>
+                        <div class="ablation-insight"><strong>Finding:</strong> FC layers tolerate L-Mul better than conv layers.</div>
+                    </div>
+                </div>
+                <div class="ablation-card fade-in stagger-2">
+                    <div class="ablation-header"><h3>NanoGPT: Layer Types</h3><span class="ablation-badge">Perplexity</span></div>
+                    <div class="ablation-body">
+                        <div class="ablation-row baseline"><span class="config">Base Perplexity</span><span class="value">4.97</span></div>
+                        <div class="ablation-row"><span class="config">Full LMUL</span><span class="value">4.64</span></div>
+                        <div class="ablation-row"><span class="config">Attn + MLP</span><span class="value">4.66</span></div>
+                        <div class="ablation-row best"><span class="config">MLP + LM Head</span><span class="value">4.55 ✓</span></div>
+                        <div class="ablation-row"><span class="config">MLP Only</span><span class="value">4.73</span></div>
+                    </div>
+                </div>
+                <div class="ablation-card fade-in stagger-3">
+                    <div class="ablation-header"><h3>Key Insights</h3></div>
+                    <div class="ablation-body">
+                        <div class="ablation-insight" style="margin:0 0 0.75rem"><strong>Dense > Spatial:</strong> FC/linear layers consistently handle L-Mul better.</div>
+                        <div class="ablation-insight" style="margin:0 0 0.75rem"><strong>Regularization:</strong> Some components actually improve with L-Mul.</div>
+                        <div class="ablation-insight" style="margin:0"><strong>Hardware Priority:</strong> Target dense matmuls first for best ROI.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="team">
+        <div class="container">
+            <div class="section-header center fade-in"><div class="section-label">The Team</div><h2 class="section-title">Who Built This</h2></div>
+            <div class="team-grid">
+                <div class="team-card fade-in"><div class="team-avatar">O</div><h4>Owen Shi</h4><p class="role">gem5 / System Sim</p></div>
+                <div class="team-card fade-in stagger-1"><div class="team-avatar">E</div><h4>Edgar Guzman</h4><p class="role">Verilog / Vivado</p></div>
+                <div class="team-card fade-in stagger-2"><div class="team-avatar">I</div><h4>Idhant Kumar</h4><p class="role">Synthesis / Power</p></div>
+                <div class="team-card fade-in stagger-3"><div class="team-avatar">B</div><h4>Brendan Kuang</h4><p class="role">NanoGPT / Transformers</p></div>
+                <div class="team-card fade-in stagger-4"><div class="team-avatar">B</div><h4>Brandon Chiou</h4><p class="role">HLS / Qwen</p></div>
+                <div class="team-card fade-in"><div class="team-avatar">P</div><h4>Pranav Kumarsubha</h4><p class="role">Ablation / Website</p></div>
+            </div>
+            <div class="advisor fade-in"><p>Advised by <strong>Professor Rajesh Gupta</strong></p><p style="margin-top:0.35rem;font-size:1rem;color:var(--text-muted)">Halıcıoğlu Data Science Institute, UC San Diego</p></div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-inner">
+            <div class="logo" style="font-size:1.4rem">L<span>-</span>Mul</div>
+            <div class="footer-links"><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration" target="_blank">GitHub</a><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/NNs" target="_blank">Notebooks</a><a href="https://github.com/oowenn/LMUL-Hardware-Acceleration/tree/main/rtl" target="_blank">RTL</a><a href="https://datascience.ucsd.edu/" target="_blank">HDSI</a></div>
+            <div class="footer-copy">DSC 180B · Winter 2026</div>
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('particles'), ctx = canvas.getContext('2d');
+        let particles = [];
+        function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+        function createParticle() { return { x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, r: Math.random() * 1.5 + 0.5, o: Math.random() * 0.4 + 0.1 }; }
+        function init() { particles = []; for (let i = 0; i < Math.floor(canvas.width * canvas.height / 20000); i++) particles.push(createParticle()); }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 255, 136, ${p.o})`; ctx.fill();
+                particles.forEach((p2, j) => { if (i === j) return; const d = Math.hypot(p.x - p2.x, p.y - p2.y); if (d < 80) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = `rgba(0, 255, 136, ${0.06 * (1 - d / 80)})`; ctx.stroke(); } });
+            });
+            requestAnimationFrame(draw);
+        }
+        resize(); init(); draw(); addEventListener('resize', () => { resize(); init(); });
+
+        const obs = new IntersectionObserver(e => { e.forEach(x => { if (x.isIntersecting) x.target.classList.add('visible'); }); }, { threshold: 0.1 });
+        document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+
+        const countObs = new IntersectionObserver(e => {
+            e.forEach(x => {
+                if (x.isIntersecting && !x.target.dataset.counted) {
+                    x.target.dataset.counted = 'true';
+                    const target = parseInt(x.target.dataset.count);
+                    if (!target) return;
+                    let current = 0; const increment = target / 60;
+                    const timer = setInterval(() => { current += increment; if (current >= target) { current = target; clearInterval(timer); } x.target.textContent = Math.floor(current); }, 16);
+                }
+            });
+        }, { threshold: 0.5 });
+        document.querySelectorAll('[data-count]').forEach(el => countObs.observe(el));
+
+        Chart.defaults.color = '#80c8a0'; Chart.defaults.borderColor = 'rgba(0, 255, 136, 0.1)';
+        const chartColors = { primary: 'rgba(0, 255, 136, 0.85)', secondary: 'rgba(0, 212, 255, 0.8)', dim: 'rgba(128, 200, 160, 0.5)' };
+
+        new Chart(document.getElementById('accuracyChart'), { type: 'bar', data: { labels: ['MLP', 'CNN', 'LSTM\nFashion', 'LSTM\nKMNIST', 'LSTM\nSeq'], datasets: [{ label: 'FP32', data: [97.02, 98.30, 83.4, 84.8, 95.2], backgroundColor: chartColors.dim, borderRadius: 3 }, { label: 'L-Mul', data: [97.01, 98.07, 82.8, 84.2, 94.6], backgroundColor: chartColors.primary, borderRadius: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { family: 'JetBrains Mono', size: 12 }, color: '#c0e8d0' } } }, scales: { y: { min: 75, max: 100, grid: { color: 'rgba(0, 255, 136, 0.08)' }, ticks: { font: { size: 12 } } }, x: { grid: { display: false }, ticks: { font: { size: 11 } } } } } });
+
+        new Chart(document.getElementById('transformerChart'), { type: 'bar', data: { labels: ['Base', 'Full\nLMUL', 'Attn+\nMLP', 'Attn\nOnly', 'MLP+\nHead', 'MLP\nOnly'], datasets: [{ label: 'Perplexity', data: [4.97, 4.64, 4.66, 4.89, 4.55, 4.73], backgroundColor: [chartColors.dim, chartColors.primary, chartColors.primary, chartColors.secondary, chartColors.primary, chartColors.secondary], borderRadius: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'Lower = Better', color: '#c0e8d0', font: { size: 12 } } }, scales: { y: { min: 4.4, max: 5.1, grid: { color: 'rgba(0, 255, 136, 0.08)' }, ticks: { font: { size: 12 } } }, x: { grid: { display: false }, ticks: { font: { size: 11 } } } } } });
+
+        new Chart(document.getElementById('speedupChart'), { type: 'line', data: { labels: ['n=4', 'n=64', 'n=256', 'n=512'], datasets: [{ label: 'Speedup (×)', data: [1.20, 8.86, 37.36, 73.04], borderColor: chartColors.primary, backgroundColor: 'rgba(0, 255, 136, 0.15)', fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: chartColors.primary, borderWidth: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, grid: { color: 'rgba(0, 255, 136, 0.08)' }, ticks: { font: { size: 12 } } }, x: { grid: { display: false }, ticks: { font: { size: 12 } } } } } });
+
+        new Chart(document.getElementById('energyChart'), { type: 'line', data: { labels: ['n=4', 'n=64', 'n=256', 'n=512'], datasets: [{ label: 'Energy Reduction (×)', data: [1.21, 9.52, 41.29, 80.97], borderColor: chartColors.secondary, backgroundColor: 'rgba(0, 212, 255, 0.15)', fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: chartColors.secondary, borderWidth: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, grid: { color: 'rgba(0, 255, 136, 0.08)' }, ticks: { font: { size: 12 } } }, x: { grid: { display: false }, ticks: { font: { size: 12 } } } } } });
+
+        new Chart(document.getElementById('areaChart'), { type: 'bar', data: { labels: ['Area (units)', 'Cell Count'], datasets: [{ label: 'IEEE', data: [545.03, 489], backgroundColor: chartColors.dim, borderRadius: 3 }, { label: 'L-Mul', data: [180.88, 181], backgroundColor: chartColors.primary, borderRadius: 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { font: { family: 'JetBrains Mono', size: 12 }, color: '#c0e8d0' } } }, scales: { y: { min: 0, grid: { color: 'rgba(0, 255, 136, 0.08)' }, ticks: { font: { size: 12 } } }, x: { grid: { display: false }, ticks: { font: { size: 12 } } } } } });
+
+        new Chart(document.getElementById('dspChart'), { type: 'doughnut', data: { labels: ['L-Mul DSP', 'Savings'], datasets: [{ data: [60, 40], backgroundColor: [chartColors.primary, 'rgba(30,30,30,0.8)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { font: { family: 'JetBrains Mono', size: 12 }, color: '#c0e8d0' } }, title: { display: true, text: '40% DSP Reduction', color: '#00ff88', font: { size: 16, weight: 'bold' } } } } });
+    </script>
+</body>
+</html>
